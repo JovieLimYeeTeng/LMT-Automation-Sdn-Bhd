@@ -1884,6 +1884,7 @@ function App() {
     const employeeWarningCounts = {
       missing: employeeWarningRecords.filter((record) => record.status === "incomplete" || record.flags.some((flag) => flag.kind === "missingPunch" || flag.kind === "noShift")).length,
       absent: employeeWarningRecords.filter((record) => record.status === "absent").length,
+      shortHours: employeeWarningRecords.filter((record) => record.flags.some((flag) => flag.kind === "underWork")).length,
       lateEarly: employeeWarningRecords.filter((record) => record.lateMinutes > 0 || record.earlyMinutes > 0).length,
       lunch: employeeWarningRecords.filter((record) => record.flags.some((flag) => flag.kind === "lunchOver")).length,
       ot: employeeWarningRecords.filter((record) => record.overtimeMinutes > 0 || record.flags.some((flag) => flag.kind === "ot")).length,
@@ -2092,6 +2093,7 @@ function App() {
               {[
                 { label: t("metricMissingPunch"), value: employeeWarningCounts.missing, tone: "warn" },
                 { label: t("metricAbsentDays"), value: employeeWarningCounts.absent, tone: "bad" },
+                { label: t("metricShortHours"), value: employeeWarningCounts.shortHours, tone: "warn" },
                 { label: t("metricLateEarly"), value: employeeWarningCounts.lateEarly, tone: "warn" },
                 { label: t("metricLunchOver"), value: employeeWarningCounts.lunch, tone: "warn" },
                 { label: t("payrollOtWarnings"), value: employeeWarningCounts.ot, tone: "good" },
@@ -3203,7 +3205,20 @@ function App() {
                     <td className="num">{row.summary.leaveDays}</td>
                     <td className="num">{row.absentDays}</td>
                     <td className="num">{row.unpaidLeaveDays}</td>
-                    <td><span className={cx("mini-pill", row.warningFlags.length > 0 ? "mini-pill-warn" : "mini-pill-good")}>{payrollWarningsText(row)}</span></td>
+                    <td>
+                      <span
+                        className={cx(
+                          "mini-pill",
+                          row.warningFlags.some((flag) => flag !== "overtime")
+                            ? "mini-pill-warn"
+                            : row.warningFlags.includes("overtime")
+                              ? "mini-pill-muted"
+                              : "mini-pill-good",
+                        )}
+                      >
+                        {payrollWarningsText(row)}
+                      </span>
+                    </td>
                     <td className="num">{row.employee.salary.currency} {row.base.toFixed(2)}</td>
                     <td className="num">{row.employee.salary.currency} {row.otPay.toFixed(2)}</td>
                     <td className="num">−{row.employee.salary.currency} {row.totalDeduct.toFixed(2)}</td>
