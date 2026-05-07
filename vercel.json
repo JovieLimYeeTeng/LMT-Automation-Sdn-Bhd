@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd prototype/tms-hr-prototype && npm ci",
+  "buildCommand": "cd prototype/tms-hr-prototype && npm run build",
+  "outputDirectory": "prototype/tms-hr-prototype/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
