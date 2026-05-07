@@ -1,0 +1,227 @@
+CL-PC3 / Click Protocol B opcode dictionary (extracted from FP_CLOCK.ocx)
+================================================================================
+
+0x101  GET_ENROLL
+        Desc: Get enrollment data: variants by sub-arg arg1 — 1=fp, 2=pw, 3=card, 7=face(20-28), 8=face(30-38)
+        Source: Reply: 10B ACK; if data exists, BigData stream of 0x58c/0x760/0x5ac bytes
+
+0x102  SET_ENROLL
+        Desc: Set enrollment data: variants by sub-arg arg1
+        Source: Used by SetEnrollData, SetUsbEnrollData, SetEnrollDataWithString, SetEnrollPhoto, SetEnrollPhotoCS
+
+0x103  DEL_ENROLL
+        Desc: Delete enrollment record (single user/backup)
+        Source: Used by DeleteEnrollData, EmptyEnrollData (sub-cases)
+
+0x104  READ_SUP_LOG_1
+        Desc: Read single super-admin log entry (address-based)
+        Source: ReadSuperLogData
+
+0x105  GET_SUP_LOG_1
+        Desc: Get single super-admin log entry (by index)
+        Source: GetSuperLogData
+
+0x106  READ_GEN_LOG_1
+        Desc: Read single attendance log entry
+        Source: ReadGeneralLogData
+
+0x107  GET_GEN_LOG_1
+        Desc: Get single attendance log entry
+        Source: GetGeneralLogData
+
+0x108  READ_ALL_SUP_LOG
+        Desc: Read ALL super-admin logs (bulk)
+        Source: ReadAllSLogData — empty device returns 10B ACK only
+
+0x109  GET_ALL_SUP_LOG
+        Desc: Get ALL super-admin logs
+        Source: GetAllSLogData
+
+0x10a  READ_ALL_GEN_LOG
+        Desc: Read ALL attendance logs (bulk)
+        Source: ReadAllGLogData — biggest data stream
+
+0x10d  GET_DEV_STATUS
+        Desc: Get device status (capacity/health)
+        Source: GetDeviceStatus
+
+0x10e  GET_DEV_INFO
+        Desc: Get device info (settings/config)
+        Source: GetDeviceInfo
+
+0x10f  SET_DEV_INFO
+        Desc: Set device info (settings)
+        Source: SetDeviceInfo
+
+0x110  ENABLE_DEV
+        Desc: Enable/disable device
+        Source: EnableDevice
+
+0x111  ENABLE_USER
+        Desc: Enable/disable single user
+        Source: EnableUser
+
+0x112  SET_DEV_TIME
+        Desc: Set device clock
+        Source: SetDeviceTime — 2 fns (DST?)
+
+0x113  GET_DEV_TIME
+        Desc: Get device clock
+        Source: GetDeviceTime
+
+0x114  POWER_ON_ALL
+        Desc: Power on all devices in chain
+        Source: PowerOnAllDevice
+
+0x115  POWER_OFF
+        Desc: Power off device
+        Source: PowerOffDevice
+
+0x116  MOD_PRIV
+        Desc: Modify user privilege
+        Source: ModifyPrivilege
+
+0x117  READ_ALL_USER_ID
+        Desc: Read all user IDs (bulk list)
+        Source: ReadAllUserID
+
+0x118  GET_ALL_USER_ID
+        Desc: Get all user IDs
+        Source: GetAllUserID
+
+0x119  GET_SERIAL
+        Desc: Get device serial number
+        Source: GetSerialNumber
+
+0x11a  EMPTY_ENROLL
+        Desc: Empty all enrollment data (DESTRUCTIVE — wipes all users/templates)
+        Source: EmptyEnrollData — DO NOT SEND
+
+0x11b  EMPTY_GEN_LOG
+        Desc: Empty all attendance logs (DESTRUCTIVE — wipes all clock-in records)
+        Source: EmptyGeneralLogData — DO NOT SEND
+
+0x11c  EMPTY_SUP_LOG
+        Desc: Empty super-admin logs (DESTRUCTIVE)
+        Source: EmptySuperLogData — DO NOT SEND
+
+0x11d  GET_USER_NAME
+        Desc: Get user name (by enroll ID)
+        Source: GetUserName
+
+0x11e  SET_USER_NAME
+        Desc: Set user name
+        Source: SetUserName
+
+0x11f  CO_NAME
+        Desc: Get/Set company name (2 fns: 0x1000588c get, 0x100058f5 set)
+        Source: GetCompanyName + SetCompanyName
+
+0x120  GET_DOOR
+        Desc: Get door status
+        Source: GetDoorStatus
+
+0x121  SET_DOOR
+        Desc: Set door status (lock/unlock)
+        Source: SetDoorStatus
+
+0x122  GET_BELL
+        Desc: Get/Set bell time?
+        Source: GetBellTime
+
+0x125  USERCTRL_GET
+        Desc: Get user access control (week/group)
+        Source: GetUserCtrl + GetUserCtrlEx (2 fns each)
+
+0x126  USERCTRL_SET
+        Desc: Set user access control
+        Source: SetUserCtrl + SetUserCtrlEx
+
+0x127  USERCTRL_DEL
+        Desc: Delete user access control entry
+        Source: DeleteUserCtrl
+
+0x128  USERCTRL_CLR
+        Desc: Clear ALL user access controls (DESTRUCTIVE)
+        Source: ClearUserCtrl — DO NOT SEND
+
+0x129  GET_WEEK
+        Desc: Get week pass time slot
+        Source: GetWeekPassTime
+
+0x12a  SET_WEEK
+        Desc: Set week pass time slot
+        Source: SetWeekPassTime
+
+0x12b  GET_DAY
+        Desc: Get day pass time slot
+        Source: GetDayPassTime
+
+0x12c  SET_DAY
+        Desc: Set day pass time slot
+        Source: SetDayPassTime
+
+0x12d  GET_LOCK_GRP
+        Desc: Get lock group ID
+        Source: GetLockGroup
+
+0x12e  SET_LOCK_GRP
+        Desc: Set lock group ID
+        Source: SetLockGroup
+
+0x12f  SET_SVR_PORT
+        Desc: Set server IP/port + heartbeat tick (used to redirect device to a server)
+        Source: SetServerPortandtick
+
+0x130  USB_READ_GEN
+        Desc: USB-based read of attendance logs
+        Source: USBReadGeneralLogData — for USB transport, may not work over TCP
+
+0x131  USB_READ_SUP
+        Desc: USB-based read of super logs
+        Source: USBReadSuperLogData
+
+0x132  SET_INOUT
+        Desc: Set in/out character mapping
+        Source: SetInoutchar
+
+0x133  GET_INOUT
+        Desc: Get in/out character mapping
+        Source: GetInoutchar
+
+0x135  GET_GEN_LOG_W_SEC
+        Desc: Get attendance log with second precision
+        Source: GetGeneralLogDataWithSecond
+
+0x136  GET_ALL_GEN_W_SEC
+        Desc: Get all attendance logs with second precision
+        Source: GetAllGLogDataWithSecond
+
+0x137  OPEN_DOOR_EX
+        Desc: Open door (extended) — UNLOCKS PHYSICAL DOOR
+        Source: OpendoorEx — DO NOT SEND
+
+0x138  GET_MAC
+        Desc: Get MAC code
+        Source: GetMacCode
+
+0x139  GET_GEN_LOG_W_TEMP
+        Desc: Get attendance log with temperature reading (post-COVID feature)
+        Source: ReadGeneralLogDataWithTemp / GetGeneralLogDataWithTemp
+
+0x13a  GET_NAME_UTF8
+        Desc: Get user name (UTF-8 encoding for non-Latin chars)
+        Source: GetUserNameUTF8
+
+0x13b  SET_NAME_UTF8
+        Desc: Set user name (UTF-8)
+        Source: SetUserNameUTF8
+
+0x513  PHOTO_SIZE_CS
+        Desc: Get enrolled photo size (Click-Specific encoding) — face JPG bytes count
+        Source: GetEnrollPhotoSize / GetEnrollPhotoCS
+
+0x514  PHOTO_GET_CS
+        Desc: Get enrolled photo bytes (Click-Specific JPG)
+        Source: GetEnrollPhoto / SetEnrollPhotoCS
+

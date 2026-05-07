@@ -1,0 +1,1570 @@
+{
+  "0x10001d72": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [
+      [
+        1888,
+        268728912
+      ]
+    ],
+    "iats": [
+      [
+        268443107,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268443173,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10001e92": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [
+      [
+        1452,
+        268730800
+      ]
+    ],
+    "iats": [],
+    "other_calls": [
+      [
+        268443342,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10001f3b": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268443507,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000203a": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268443745,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10002099": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268443844,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10002180": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268444129,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268444224,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10002284": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268444381,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000233b": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268444527,
+        "CopyHelper"
+      ],
+      [
+        268444581,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000247f": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268444846,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100024db": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268444942,
+        "RecResult"
+      ],
+      [
+        268445003,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10002571": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268445170,
+        "RecResult"
+      ],
+      [
+        268445219,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100026ad": {
+    "cmds": [
+      259
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268445368,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": []
+  },
+  "0x100026f4": {
+    "cmds": [
+      259
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": []
+  },
+  "0x10002726": {
+    "cmds": [
+      259
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268445522,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000277a": {
+    "cmds": [
+      259
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": []
+  },
+  "0x100027a9": {
+    "cmds": [
+      259
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": []
+  },
+  "0x100027d8": {
+    "cmds": [
+      259
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268445691,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000282a": {
+    "cmds": [
+      260,
+      261
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268445767,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268445814,
+        "RecResult"
+      ],
+      [
+        268445936,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10002d5f": {
+    "cmds": [
+      262,
+      263
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268447102,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268447147,
+        "RecResult"
+      ],
+      [
+        268447304,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100030e5": {
+    "cmds": [
+      262,
+      313
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268448014,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268448059,
+        "RecResult"
+      ],
+      [
+        268448218,
+        "RecResult"
+      ],
+      [
+        268448368,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100036d4": {
+    "cmds": [
+      261
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268449524,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268449577,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000380a": {
+    "cmds": [
+      263
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268449836,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268449888,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10003b4a": {
+    "cmds": [
+      313
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268450668,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268450720,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10003f3f": {
+    "cmds": [
+      264
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268451658,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268451698,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10003f98": {
+    "cmds": [
+      265
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268451759,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268451799,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004002": {
+    "cmds": [
+      266
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268451872,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268451915,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004078": {
+    "cmds": [],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268451984,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268452029,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100040cf": {
+    "cmds": [],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268452076,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000414d": {
+    "cmds": [
+      269
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268452184,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268452230,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100041ae": {
+    "cmds": [
+      271
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268452290,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268452355,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004234": {
+    "cmds": [
+      270
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268452434,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268452498,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004326": {
+    "cmds": [
+      272
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268452672,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268452709,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100043e8": {
+    "cmds": [
+      273
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268452851,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268452891,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004444": {
+    "cmds": [
+      274
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268452965,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268453012,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100044db": {
+    "cmds": [
+      274
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268453160,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000468f": {
+    "cmds": [
+      275
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268453559,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268453600,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004775": {
+    "cmds": [
+      276
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268453776,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268453813,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004804": {
+    "cmds": [
+      277
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268453920,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268453957,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004872": {
+    "cmds": [
+      278
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268454055,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268454096,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004965": {
+    "cmds": [
+      303
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268454295,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268454344,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004ab6": {
+    "cmds": [
+      279
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268454608,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268454645,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004b22": {
+    "cmds": [
+      280
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268454720,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268454757,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004b92": {
+    "cmds": [
+      281
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268454832,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268454869,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004c78": {
+    "cmds": [
+      282
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268455043,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268455107,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10004fd1": {
+    "cmds": [
+      283
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268455901,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268456065,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005126": {
+    "cmds": [
+      304
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268456241,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268456300,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005278": {
+    "cmds": [
+      305
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268456580,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268456708,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005397": {
+    "cmds": [
+      314
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268456866,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268456936,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100054f4": {
+    "cmds": [
+      315
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268457216,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268457379,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005625": {
+    "cmds": [
+      284
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268457520,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268457582,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005797": {
+    "cmds": [
+      285
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268457959,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000581c": {
+    "cmds": [
+      286
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268458032,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268458069,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000588c": {
+    "cmds": [
+      287
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268458144,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268458184,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100058f5": {
+    "cmds": [
+      287
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268458256,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268458296,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005965": {
+    "cmds": [
+      288
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268458370,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268458426,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005a1c": {
+    "cmds": [
+      289
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268458598,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268458658,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005ad3": {
+    "cmds": [
+      306
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268458738,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268458794,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005b92": {
+    "cmds": [
+      307
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268458984,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268459044,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005c55": {
+    "cmds": [
+      297
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268459141,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268459193,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005d07": {
+    "cmds": [
+      298
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268459310,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268459365,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005d9c": {
+    "cmds": [
+      299
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268459465,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268459517,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005e54": {
+    "cmds": [
+      300
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268459657,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268459738,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005f17": {
+    "cmds": [
+      301
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268459838,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268459874,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10005fa3": {
+    "cmds": [
+      302
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268459999,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268460034,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10006094": {
+    "cmds": [
+      293
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268460191,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268460226,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100061be": {
+    "cmds": [
+      294
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268460622,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268460678,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10006314": {
+    "cmds": [
+      293
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268460831,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268460866,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10006468": {
+    "cmds": [
+      294
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268461324,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268461380,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100065b2": {
+    "cmds": [
+      295
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268461501,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268461537,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10006608": {
+    "cmds": [
+      296
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268461600,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268461637,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10006672": {
+    "cmds": [
+      310
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268461802,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268461864,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100068e0": {
+    "cmds": [
+      309
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268462373,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268462609,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10006a98": {
+    "cmds": [
+      311
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268462768,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268462808,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10006b05": {
+    "cmds": [
+      312
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268462880,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268462917,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100080ed": {
+    "cmds": [
+      290
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268468480,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268468517,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10008152": {
+    "cmds": [
+      1299
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268468627,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": []
+  },
+  "0x1000827d": {
+    "cmds": [
+      1300
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268468939,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268469015,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100083ad": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [
+      [
+        1888,
+        268728912
+      ]
+    ],
+    "iats": [
+      [
+        268469265,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268469331,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100084fa": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268469554,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10008629": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268469840,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10008684": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268469927,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100087b9": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268470409,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x100088fc": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268470732,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10008a3f": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268471023,
+        "CopyHelper"
+      ],
+      [
+        268471073,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10008c36": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268471401,
+        "RecResult"
+      ],
+      [
+        268471462,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10008cce": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [],
+    "other_calls": [
+      [
+        268471549,
+        "RecResult"
+      ],
+      [
+        268471598,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10009cf8": {
+    "cmds": [
+      282
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268475651,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268475711,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x10009e01": {
+    "cmds": [
+      283
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268475917,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268476023,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000a19f": {
+    "cmds": [
+      264
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268476842,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268476882,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000a234": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268476991,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268477027,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000a324": {
+    "cmds": [
+      258
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268477233,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268477339,
+        "RecResult"
+      ],
+      [
+        268477392,
+        "RecResult"
+      ],
+      [
+        268477440,
+        "RecResult"
+      ]
+    ]
+  },
+  "0x1000a494": {
+    "cmds": [
+      257
+    ],
+    "rec_big_buffers": [],
+    "iats": [
+      [
+        268477599,
+        "SetMachineIDX"
+      ]
+    ],
+    "other_calls": [
+      [
+        268477635,
+        "RecResult"
+      ]
+    ]
+  }
+}

@@ -1,0 +1,67 @@
+/tmp/wemax_ws.py:14: DeprecationWarning: websockets.server.serve is deprecated
+  from websockets.server import serve
+[19:59:33.116] WS listener on 0.0.0.0:7788
+
+======================================================================
+[19:59:38.270] CONNECT  peer=('192.168.100.150', 22792)  path=/pub/chat
+======================================================================
+/tmp/wemax_ws.py:73: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  utc_now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+[19:59:38.473] FRAME#1 TEXT (324 chars)
+  RAW: {"cmd":"reg","sn":"ZYTI25116685","devinfo":{"modelname":"tfs30","usersize":3000,"fpsize":3000,"cardsize":3000,"pwdsize":3000,"logsize":193877,"useduser":2,"usedfp":2,"usedcard":0,"usedpwd":0,"usedlog":1,"usednewlog":0,"fpalgo":"thbio3.0","firmware":"TH900_click V5.0","time":"2026-04-30 11:59:37","mac":"00-01-F5-02-7D-5F"}}
+  JSON parsed:
+  {
+    "cmd": "reg",
+    "sn": "ZYTI25116685",
+    "devinfo": {
+      "modelname": "tfs30",
+      "usersize": 3000,
+      "fpsize": 3000,
+      "cardsize": 3000,
+      "pwdsize": 3000,
+      "logsize": 193877,
+      "useduser": 2,
+      "usedfp": 2,
+      "usedcard": 0,
+      "usedpwd": 0,
+      "usedlog": 1,
+      "usednewlog": 0,
+      "fpalgo": "thbio3.0",
+      "firmware": "TH900_click V5.0",
+      "time": "2026-04-30 11:59:37",
+      "mac": "00-01-F5-02-7D-5F"
+    }
+  }
+  → REPLY: {"ret": "reg", "result": true, "cloudtime": "2026-04-30 11:59:38", "nosenduser": false, "nosendlog": false}
+  → REPLY: {"cmd": "getuserinfo", "sn": "ZYTI25116685", "enrollid": 1}
+  → REPLY: {"cmd": "getuserinfo", "sn": "ZYTI25116685", "enrollid": 2}
+  → REPLY: {"cmd": "getuserlist", "sn": "ZYTI25116685", "stn": true}
+
+[19:59:39.677] FRAME#2 TEXT (1264 chars)
+  RAW: {"ret":"getuserinfo","sn":"ZYTI25116685","result":true,"enrollid":1,"name":"Ben","backupnum":0,"admin":0,"record":"c5236a01eb87aaa6ff34384480b9bb110005c805e0b6a34aff383a4361b5cb7507c3cb0266b6eb76ef47b98410ba537def74288468b7a3bdef4bb984dbb6fbd9ef38498258848c19efc3fdc18aba4c25100788855eb6f45de745b94258b4e475e7c3f94355b56c92e844094159b73491e007b803ceb5d4da0eb81982ce84c4e5fefe0ac2ceb76cfa0eb43a4650b874f6b8d7b8ca39b95d15c9a2386232b9d50dd1a6490e4ab60d25e889dac5c0b7460de8be1d86d7b5ebc1ff781b0376b953ad1...
+  JSON parsed:
+  {
+    "ret": "getuserinfo",
+    "sn": "ZYTI25116685",
+    "result": true,
+    "enrollid": 1,
+    "name": "Ben",
+    "backupnum": 0,
+    "admin": 0,
+    "record": "c5236a01eb87aaa6ff34384480b9bb110005c805e0b6a34aff383a4361b5cb7507c3cb0266b6eb76ef47b98410ba537def74288468b7a3bdef4bb984dbb6fbd9ef38498258848c19efc3fdc18aba4c25100788855eb6f45de745b94258b4e475e7c3f94355b56c92e844094159b73491e007b803ceb5d4da0eb81982ce84c4e5fefe0ac2ceb76cfa0eb43a4650b874f6b8d7b8ca39b95d15c9a2386232b9d50dd1a6490e4ab60d25e889dac5c0b7460de8be1d86d7b5ebc1ff781b0376b953ad108b980807b92bcd062e48ca868b2a7607c5dac3868b9b011047dc03188c8b15f839fec2198c6419f879f9c2908cbc191fffda41288ca4b9f835fa04c5b8ae49e87faa442c8ce56ef8f9fec5388cadeef8b7fb864d8abe25ff6ffc46(200)9535f5f3554f24318521340253335f16284bf3247272136a744853721453751234255262f325435a251664679422c65b83a4ab43525b5382916a322f54365fd417687149866408(41)1e6aca147281aa8264574304ca82763423d37982ac4c3351d680ef5a185665880d03104461912d6d3345a181445232e3c9902a4f3271eea1045f373565938e502041d690414f22e4dd819b505261d891741725e3be81a376241134a06f540340c69042532220d0b0946803e387a10e570140c290bd531520dcb06e4456640681e24e3626e3d15c28637687909122110095904d1d6833a1a15a501274dac0dc2e935355a1626d670380a0514f2114e0a00a2186858dc11118170d1206090a101307050401020e16140c0300151c0b1f1a1e1d0f2218fe"
+  }
+
+[19:59:39.680] FRAME#3 TEXT (837 chars)
+  RAW: {"ret":"getuserinfo","sn":"ZYTI25116685","result":true,"enrollid":2,"name":"Lw","backupnum":0,"admin":0,"record":"c51762036df8f33d088da88684fb0b690089b885e2e803a1e73e39065ef85409270bc78980faac0100899747d4e76425ff7e3803d6f7f45ee73e47c403f9a481ed6e460966f9ccd16853958f87fafccd388995463caa1579c11ff96829ba5d91dfe1f8543a893db9c7d1f8482bba4dc1e7ddf94b81eb2ae117fe080611fb23060738278656e733f917c7f8c31d6a5545efe3f7a430aa355dc9a3f7e90a79e22aff3e1a027938da46e7c7f9436c77cab5efc9fb48204c44a5ff77f581(296)75246...
+  JSON parsed:
+  {
+    "ret": "getuserinfo",
+    "sn": "ZYTI25116685",
+    "result": true,
+    "enrollid": 2,
+    "name": "Lw",
+    "backupnum": 0,
+    "admin": 0,
+    "record": "c51762036df8f33d088da88684fb0b690089b885e2e803a1e73e39065ef85409270bc78980faac0100899747d4e76425ff7e3803d6f7f45ee73e47c403f9a481ed6e460966f9ccd16853958f87fafccd388995463caa1579c11ff96829ba5d91dfe1f8543a893db9c7d1f8482bba4dc1e7ddf94b81eb2ae117fe080611fb23060738278656e733f917c7f8c31d6a5545efe3f7a430aa355dc9a3f7e90a79e22aff3e1a027938da46e7c7f9436c77cab5efc9fb48204c44a5ff77f581(296)752466726345496142641f72352c445a32b78742545953f6d47f432d43de5457fffbff85188ff3ff6f(71)1162164c62b3ed71ce4c0353e262f06c1124a572300b4214e1813b1d1632b281297220c2bd53d17412222391b0234120a071bb5c3212c8511c2d1b7662717b5b107250793c5b2142327a1d571023219a775902c48d8541182305aa908c04756214a0162202d99b92(78)0407030001080206090f11120a0b14130d(13)ea9a"
+  }

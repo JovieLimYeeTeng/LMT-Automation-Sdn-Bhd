@@ -1,0 +1,46 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+.vite/
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Vercel
+.vercel/
+
+# Allow ALL research / vendor / sample assets — large files welcome.
+# Logs are tracked when they are reverse-engineering captures (under tools/.../captured/).
+# Build / runtime logs in prototype/ should still be ignored.
+prototype/**/*.log
+
+__pycache__/
+*.pyc
+
+# Big screen recordings (>100MB GitHub limit). Keep on disk, exclude from git.
+**/Screen Recording*MB.mp4
+**/Screen Recording*200MB.mp4
+**/Screen Recording*400MB.mp4
+
+# Extracted vendor zip (the .zip file itself is committed)
+requirements/hardware/software/tms-setup-V1.0.402/
+
+# Sensitive license / master-key materials. Keep locally, never push.
+requirements/hardware/software/Master_key.txt
+requirements/hardware/manuals/from-vendor-zip/How to register TMS Master key.pdf
+requirements/hardware/manuals/from-vendor-zip/How to register your Master Key.pdf
+
+# Per-session git worktrees (separate checkouts under .claude/worktrees/)
+.claude/worktrees/

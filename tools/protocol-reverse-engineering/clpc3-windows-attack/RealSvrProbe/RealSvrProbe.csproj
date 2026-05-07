@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x86</PlatformTarget>
+    <Prefer32Bit>true</Prefer32Bit>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Interop.RealSvrOcxTcpLib">
+      <HintPath>..\..\..\..\requirements\hardware\software\tms-setup-V1.0.402\Interop.RealSvrOcxTcpLib.dll</HintPath>
+    </Reference>
+    <Reference Include="AxInterop.RealSvrOcxTcpLib">
+      <HintPath>..\..\..\..\requirements\hardware\software\tms-setup-V1.0.402\AxInterop.RealSvrOcxTcpLib.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>
