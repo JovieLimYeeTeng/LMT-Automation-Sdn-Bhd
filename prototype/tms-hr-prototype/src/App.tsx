@@ -534,6 +534,15 @@ function App() {
     openThisMonth("timecards");
   }
 
+  function openTimecardDetail(employeeId: string, date: string) {
+    setSelectedEmployeeId(employeeId);
+    setSelectedDate(date);
+    setTimecardStatusFilter("all");
+    setTimecardPage(1);
+    setTimecardDetailOpen(true);
+    openThisMonth("timecards");
+  }
+
   function openReports(type: ReportId = "summary") {
     setReportType(type);
     setActiveView("reports");
@@ -883,31 +892,23 @@ function App() {
 
   function loadDemoData() {
     const seed = createSeedData();
-    setData((current) => ({
-      ...current,
-      employees: seed.employees,
-      shifts: seed.shifts,
-      holidays: seed.holidays,
-      leaves: seed.leaves,
-      punches: seed.punches,
-      settings: {
-        ...current.settings,
-        businessDate: seed.settings.businessDate,
-        defaultMonth: seed.settings.defaultMonth,
-        companies: seed.settings.companies,
-        departments: seed.settings.departments,
-        leaveTypes: seed.settings.leaveTypes,
-        paidLeaveTypes: seed.settings.paidLeaveTypes,
-        device: seed.settings.device,
-      },
-    }));
+    setData((current) => {
+      const sampleLeaveIds = new Set(seed.leaves.map((leave) => leave.id));
+      return {
+        ...current,
+        // Loading sample records must not overwrite HR's employee master data,
+        // salaries, shifts, departments, holidays, or security settings.
+        leaves: [...current.leaves.filter((leave) => !sampleLeaveIds.has(leave.id)), ...seed.leaves],
+        punches: seed.punches,
+      };
+    });
     setSelectedMonth(seed.settings.defaultMonth);
     setSelectedDate(seed.settings.businessDate);
-    setSelectedEmployeeId(seed.employees[0]?.id ?? "");
-    setSelectedShiftId(seed.shifts[0]?.id ?? "");
+    setSelectedEmployeeId(data.employees[0]?.id ?? seed.employees[0]?.id ?? "");
+    setSelectedShiftId(data.shifts[0]?.id ?? seed.shifts[0]?.id ?? "");
     setImportMessage(t("demoLoadedMessage", {
-      employees: seed.employees.length,
-      shifts: seed.shifts.length,
+      employees: data.employees.length || seed.employees.length,
+      shifts: data.shifts.length || seed.shifts.length,
       punches: seed.punches.length,
     }));
   }
@@ -1872,6 +1873,23 @@ function App() {
     const employeePunchLog = data.punches
       .filter((punch) => punch.employeeId === selectedEmployee.id && punch.date.startsWith(selectedMonth))
       .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+    const employeeMonthRecords = monthDates(selectedMonth).map((date) => calculateAttendance(data, selectedEmployee, date));
+    const employeeWarningRecords = monthlyReadiness.hasOperationalData ? employeeMonthRecords.filter((record) => {
+      const unpaidLeave = Boolean(record.leave && !isPaidLeaveType(record.leave.type, data));
+      const attentionFlag = record.flags.some((flag) =>
+        ["late", "early", "ot", "lunchOver", "underWork", "noRecord", "noShift", "missingPunch", "holidayWork", "restDayWork"].includes(flag.kind),
+      );
+      return record.status === "absent" || record.status === "incomplete" || attentionFlag || unpaidLeave;
+    }) : [];
+    const employeeWarningCounts = {
+      missing: employeeWarningRecords.filter((record) => record.status === "incomplete" || record.flags.some((flag) => flag.kind === "missingPunch" || flag.kind === "noShift")).length,
+      absent: employeeWarningRecords.filter((record) => record.status === "absent").length,
+      lateEarly: employeeWarningRecords.filter((record) => record.lateMinutes > 0 || record.earlyMinutes > 0).length,
+      lunch: employeeWarningRecords.filter((record) => record.flags.some((flag) => flag.kind === "lunchOver")).length,
+      ot: employeeWarningRecords.filter((record) => record.overtimeMinutes > 0 || record.flags.some((flag) => flag.kind === "ot")).length,
+      unpaidLeave: employeeWarningRecords.filter((record) => record.leave && !isPaidLeaveType(record.leave.type, data)).length,
+    };
+    const employeeWarningTotal = Object.values(employeeWarningCounts).reduce((sum, count) => sum + count, 0);
     return (
       <div className="view-stack">
         <div className="detail-back-row">
@@ -2027,8 +2045,9 @@ function App() {
                     <span>{t("payrollPreviewMonth")} {selectedMonth}</span>
                   </div>
                   <div className="payroll-preview-grid">
-                    <div><span>{t("payrollPreviewWorkHours")}</span><strong>{pay.workHours.toFixed(1)}h</strong></div>
-                    <div><span>{t("payrollPreviewOtHours")}</span><strong>{pay.otHours.toFixed(1)}h</strong></div>
+                    <div><span>{t("payrollPreviewWorkHours")}</span><strong>{pay.workHours.toFixed(2)}h</strong></div>
+                    <div><span>{t("payrollPreviewPaidLeaveHours")}</span><strong>{pay.summary.paidLeaveHours.toFixed(2)}h</strong></div>
+                    <div><span>{t("payrollPreviewOtHours")}</span><strong>{pay.otHours.toFixed(2)}h</strong></div>
                     <div><span>{t("payrollPreviewLeaveDays")}</span><strong>{pay.summary.leaveDays}</strong></div>
                     <div><span>{t("payrollColAbsentDays")}</span><strong>{pay.summary.absentDays}</strong></div>
                     <div><span>{t("payrollPreviewDeductibleLeaveDays")}</span><strong>{pay.summary.deductibleLeaveDays}</strong></div>
@@ -2053,6 +2072,75 @@ function App() {
                 </div>
               );
             })()}
+          </section>
+
+          <section className="panel employee-warning-panel">
+            <SectionTitle
+              title={t("employeeWarningsTitle")}
+              action={
+                <span className={cx("mini-pill", !monthlyReadiness.hasOperationalData ? "mini-pill-muted" : employeeWarningTotal > 0 ? "mini-pill-warn" : "mini-pill-good")}>
+                  {!monthlyReadiness.hasOperationalData
+                    ? t("employeeWarningsNoDataShort")
+                    : employeeWarningTotal > 0
+                      ? t("employeeWarningsCount", { count: employeeWarningTotal })
+                      : t("employeeWarningsClear")}
+                </span>
+              }
+            />
+            <p className="panel-caption">{t("employeeWarningsCaption")}</p>
+            <div className="employee-warning-summary">
+              {[
+                { label: t("metricMissingPunch"), value: employeeWarningCounts.missing, tone: "warn" },
+                { label: t("metricAbsentDays"), value: employeeWarningCounts.absent, tone: "bad" },
+                { label: t("metricLateEarly"), value: employeeWarningCounts.lateEarly, tone: "warn" },
+                { label: t("metricLunchOver"), value: employeeWarningCounts.lunch, tone: "warn" },
+                { label: t("payrollOtWarnings"), value: employeeWarningCounts.ot, tone: "good" },
+                { label: t("payrollColUnpaidLeaveDays"), value: employeeWarningCounts.unpaidLeave, tone: "bad" },
+              ].map((item) => (
+                <div className={cx("employee-warning-tile", item.value > 0 && `employee-warning-tile-${item.tone}`)} key={item.label}>
+                  <strong>{item.value}</strong>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
+            <div className="table-wrap employee-warning-list">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t("colDate")}</th>
+                    <th>{t("colStatus")}</th>
+                    <th>{t("colIn")}</th>
+                    <th>{t("colOut")}</th>
+                    <th>{t("colHours")}</th>
+                    <th>{t("colFlags")}</th>
+                    <th>{t("colAction")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employeeWarningRecords.slice(0, 12).map((record) => (
+                    <tr key={`${record.employee.id}-${record.date}`}>
+                      <td>{record.date}</td>
+                      <td><span className={statusClass(record.status)}>{statusLabels[lang][record.status]}</span></td>
+                      <td>{record.clockIn || "-"}</td>
+                      <td>{record.clockOut || "-"}</td>
+                      <td>{formatHours(record.workMinutes)}</td>
+                      <td>{formatFlags(record.flags, lang)}</td>
+                      <td>
+                        <Button icon={Wand2} variant="secondary" onClick={() => openTimecardDetail(record.employee.id, record.date)}>
+                          {t("employeeWarningsFix")}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {employeeWarningRecords.length === 0 ? (
+                    <tr><td colSpan={7} className="empty-cell">{monthlyReadiness.hasOperationalData ? t("employeeWarningsEmpty") : t("employeeWarningsNoData")}</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+            {employeeWarningRecords.length > 12 ? (
+              <p className="panel-caption muted">{t("employeeWarningsMore", { count: employeeWarningRecords.length - 12 })}</p>
+            ) : null}
           </section>
 
           <section className="panel employee-punch-log">
@@ -2945,6 +3033,7 @@ function App() {
               employee,
               summary: pay.summary,
               workHours: pay.workHours,
+              paidLeaveHours: pay.summary.paidLeaveHours,
               otHours: pay.otHours,
               base: pay.base,
               otPay: pay.otPay,
@@ -3002,6 +3091,7 @@ function App() {
         t("payrollColDept"),
         t("payrollColType"),
         t("payrollColWorkHours"),
+        t("payrollColPaidLeaveHours"),
         t("payrollColOtHours"),
         t("payrollColLeaveDays"),
         t("payrollColAbsentDays"),
@@ -3020,6 +3110,7 @@ function App() {
         [t("payrollColDept")]: translateDataValue(row.employee.department, lang),
         [t("payrollColType")]: row.employee.salary.type === "monthly" ? t("salaryTypeMonthly") : t("salaryTypeHourly"),
         [t("payrollColWorkHours")]: row.workHours.toFixed(2),
+        [t("payrollColPaidLeaveHours")]: row.paidLeaveHours.toFixed(2),
         [t("payrollColOtHours")]: row.otHours.toFixed(2),
         [t("payrollColLeaveDays")]: row.summary.leaveDays,
         [t("payrollColAbsentDays")]: row.absentDays,
@@ -3078,6 +3169,7 @@ function App() {
                   <th>{t("payrollColDept")}</th>
                   <th>{t("payrollColType")}</th>
                   <th className="num">{t("payrollColWorkHours")}</th>
+                  <th className="num">{t("payrollColPaidLeaveHours")}</th>
                   <th className="num">{t("payrollColOtHours")}</th>
                   <th className="num">{t("payrollColLeaveDays")}</th>
                   <th className="num">{t("payrollColAbsentDays")}</th>
@@ -3105,8 +3197,9 @@ function App() {
                     </td>
                     <td>{translateDataValue(row.employee.department, lang)}</td>
                     <td>{row.employee.salary.type === "monthly" ? t("salaryTypeMonthly") : t("salaryTypeHourly")}</td>
-                    <td className="num">{row.workHours.toFixed(1)}</td>
-                    <td className="num">{row.otHours.toFixed(1)}</td>
+                    <td className="num">{row.workHours.toFixed(2)}</td>
+                    <td className="num">{row.paidLeaveHours.toFixed(2)}</td>
+                    <td className="num">{row.otHours.toFixed(2)}</td>
                     <td className="num">{row.summary.leaveDays}</td>
                     <td className="num">{row.absentDays}</td>
                     <td className="num">{row.unpaidLeaveDays}</td>
@@ -3118,13 +3211,13 @@ function App() {
                   </tr>
                 ))}
                 {rows.length === 0 ? (
-                  <tr><td colSpan={14} className="empty-cell">{t("noMatchingRecords")}</td></tr>
+                  <tr><td colSpan={15} className="empty-cell">{t("noMatchingRecords")}</td></tr>
                 ) : null}
               </tbody>
               {rows.length > 0 ? (
                 <tfoot>
                   <tr>
-                    <td colSpan={13} className="num"><strong>{t("payrollGrandTotal")}</strong></td>
+                    <td colSpan={14} className="num"><strong>{t("payrollGrandTotal")}</strong></td>
                     <td className="num"><strong>{Object.entries(grandTotalByCurrency).map(([cur, sum]) => `${cur} ${sum.toFixed(2)}`).join(" / ")}</strong></td>
                   </tr>
                 </tfoot>
