@@ -540,6 +540,8 @@ export const dict = {
     payrollPreviewNoteMonthly: "月薪员工：正常工资 = 月薪金额（入职当月按天比例）+ 加班工资 - 旷工 / 无薪假扣款。年假 / 带薪假不扣款；不含税、公积金（EPF）、社险（SOCSO）等法定扣款。",
     payrollPreviewNoteHourly: "时薪员工：正常工资 =（普通工时 + 带薪假小时）x 时薪；加班另算 = 加班小时 x 时薪 x 加班倍率。年假 / 带薪假会显示为带薪假小时；不含税、公积金（EPF）、社险（SOCSO）等法定扣款。",
     payrollPreviewProrationNote: "本月按 {proratedDays} / {totalDays} 天比例计算（员工入职日晚于月初）。",
+    payrollPreviewNoDataTitle: "还不能计算薪资",
+    payrollPreviewNoDataBody: "这个月份还没有导入打卡 / 请假记录。先导入本月记录后，系统才会显示工时、旷工扣款和参考应发。",
 
     // Payroll top-level view
     navPayroll: "发薪前检查",
@@ -1170,6 +1172,8 @@ export const dict = {
     payrollPreviewNoteMonthly: "Monthly staff: normal pay = monthly amount, pro-rated for join date when needed, plus overtime pay minus absent / unpaid leave deductions. Annual / paid leave is not deducted. Excludes tax and statutory deductions (EPF, SOCSO).",
     payrollPreviewNoteHourly: "Hourly staff: normal pay = (regular hours + paid leave hours) x hourly rate. Overtime is shown separately as OT hours x hourly rate x OT multiplier. Annual / paid leave appears as paid leave hours. Excludes tax and statutory deductions (EPF, SOCSO).",
     payrollPreviewProrationNote: "Pro-rated by {proratedDays} / {totalDays} days this month (joined after the start of the month).",
+    payrollPreviewNoDataTitle: "Payroll cannot be calculated yet",
+    payrollPreviewNoDataBody: "No punch / leave records have been imported for this month yet. Import this month's records first, then work hours, absent deductions, and reference payable will appear here.",
 
     // Payroll top-level view
     navPayroll: "Payroll Check",

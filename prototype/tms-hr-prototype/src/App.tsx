@@ -2036,7 +2036,18 @@ function App() {
               </Field>
             </div>
             <p className="panel-caption">{t("salaryHelpOT")}</p>
-            {(() => {
+            {!monthlyReadiness.hasOperationalData ? (
+              <div className="payroll-preview payroll-preview-empty">
+                <div className="payroll-preview-header">
+                  <strong>{t("payrollPreviewTitle")}</strong>
+                  <span>{t("payrollPreviewMonth")} {selectedMonth}</span>
+                </div>
+                <div className="empty-cell payroll-preview-empty-message">
+                  <strong>{t("payrollPreviewNoDataTitle")}</strong>
+                  <span>{t("payrollPreviewNoDataBody")}</span>
+                </div>
+              </div>
+            ) : (() => {
               const pay = payrollFor(data, selectedEmployee, selectedMonth);
               const fmt = (n: number) => `${pay.currency} ${n.toFixed(2)}`;
               return (
@@ -2110,11 +2121,10 @@ function App() {
                 <thead>
                   <tr>
                     <th>{t("colDate")}</th>
-                    <th>{t("colStatus")}</th>
+                    <th>{t("colFlags")}</th>
                     <th>{t("colIn")}</th>
                     <th>{t("colOut")}</th>
                     <th>{t("colHours")}</th>
-                    <th>{t("colFlags")}</th>
                     <th>{t("colAction")}</th>
                   </tr>
                 </thead>
@@ -2122,11 +2132,10 @@ function App() {
                   {employeeWarningRecords.slice(0, 12).map((record) => (
                     <tr key={`${record.employee.id}-${record.date}`}>
                       <td>{record.date}</td>
-                      <td><span className={statusClass(record.status)}>{statusLabels[lang][record.status]}</span></td>
+                      <td>{formatFlags(record.flags, lang)}</td>
                       <td>{record.clockIn || "-"}</td>
                       <td>{record.clockOut || "-"}</td>
                       <td>{formatHours(record.workMinutes)}</td>
-                      <td>{formatFlags(record.flags, lang)}</td>
                       <td>
                         <Button icon={Wand2} variant="secondary" onClick={() => openTimecardDetail(record.employee.id, record.date)}>
                           {t("employeeWarningsFix")}
@@ -2135,7 +2144,7 @@ function App() {
                     </tr>
                   ))}
                   {employeeWarningRecords.length === 0 ? (
-                    <tr><td colSpan={7} className="empty-cell">{monthlyReadiness.hasOperationalData ? t("employeeWarningsEmpty") : t("employeeWarningsNoData")}</td></tr>
+                    <tr><td colSpan={6} className="empty-cell">{monthlyReadiness.hasOperationalData ? t("employeeWarningsEmpty") : t("employeeWarningsNoData")}</td></tr>
                   ) : null}
                 </tbody>
               </table>

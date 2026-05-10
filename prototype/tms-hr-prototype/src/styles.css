@@ -2141,6 +2141,21 @@ input[type="color"] {
   font-variant-numeric: tabular-nums;
 }
 
+.payroll-preview-empty-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.payroll-preview-empty-message strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
 .payroll-preview-gross {
   background: rgba(47, 125, 116, 0.10) !important;
   border-color: rgba(47, 125, 116, 0.4) !important;
