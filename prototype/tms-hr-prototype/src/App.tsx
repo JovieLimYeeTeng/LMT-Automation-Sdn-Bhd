@@ -2121,6 +2121,7 @@ function App() {
                 <thead>
                   <tr>
                     <th>{t("colDate")}</th>
+                    <th>{t("colStatus")}</th>
                     <th>{t("colFlags")}</th>
                     <th>{t("colIn")}</th>
                     <th>{t("colOut")}</th>
@@ -2132,6 +2133,7 @@ function App() {
                   {employeeWarningRecords.slice(0, 12).map((record) => (
                     <tr key={`${record.employee.id}-${record.date}`}>
                       <td>{record.date}</td>
+                      <td><span className={statusClass(record.status)}>{statusLabels[lang][record.status]}</span></td>
                       <td>{formatFlags(record.flags, lang)}</td>
                       <td>{record.clockIn || "-"}</td>
                       <td>{record.clockOut || "-"}</td>
@@ -2144,7 +2146,7 @@ function App() {
                     </tr>
                   ))}
                   {employeeWarningRecords.length === 0 ? (
-                    <tr><td colSpan={6} className="empty-cell">{monthlyReadiness.hasOperationalData ? t("employeeWarningsEmpty") : t("employeeWarningsNoData")}</td></tr>
+                    <tr><td colSpan={7} className="empty-cell">{monthlyReadiness.hasOperationalData ? t("employeeWarningsEmpty") : t("employeeWarningsNoData")}</td></tr>
                   ) : null}
                 </tbody>
               </table>
