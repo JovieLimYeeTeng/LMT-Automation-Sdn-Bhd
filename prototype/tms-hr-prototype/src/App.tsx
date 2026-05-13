@@ -121,9 +121,28 @@ function normalizeDataList(values: string[] | undefined): string[] {
   return Array.from(new Set((values ?? []).map(normalizeDataValue).filter(Boolean)));
 }
 
+function buildPositionList(raw: AppData, seed: AppData): string[] {
+  return normalizeDataList([
+    ...(raw.settings.positions ?? []),
+    ...seed.settings.positions,
+    ...raw.employees.map((employee) => employee.position),
+    ...seed.employees.map((employee) => employee.position),
+  ]);
+}
+
+function buildNationalityList(raw: AppData, seed: AppData): string[] {
+  return normalizeDataList([
+    ...(raw.settings.nationalities ?? []),
+    ...seed.settings.nationalities,
+    ...raw.employees.map((employee) => employee.nationality),
+    ...seed.employees.map((employee) => employee.nationality),
+  ]);
+}
+
 function hydrateEmployee(raw: Employee): Employee {
   return {
     ...raw,
+    nationality: normalizeDataValue(raw.nationality),
     department: normalizeDataValue(raw.department),
     position: normalizeDataValue(raw.position),
     autoShift: raw.autoShift ?? false,
@@ -163,6 +182,8 @@ function hydrateData(raw: AppData): AppData {
   const leaveTypes = normalizeDataList(raw.settings.leaveTypes);
   const paidLeaveTypes = normalizeDataList(raw.settings.paidLeaveTypes);
   const seed = createSeedData();
+  const positions = buildPositionList(raw, seed);
+  const nationalities = buildNationalityList(raw, seed);
   const rawShiftIds = new Set(raw.shifts.map((shift) => shift.id));
   const rawEmployeeIds = new Set(raw.employees.map((employee) => employee.id));
   return {
@@ -181,6 +202,8 @@ function hydrateData(raw: AppData): AppData {
     settings: {
       ...raw.settings,
       departments: normalizeDataList(raw.settings.departments),
+      positions,
+      nationalities,
       leaveTypes,
       paidLeaveTypes: paidLeaveTypes.length ? paidLeaveTypes : DEFAULT_PAID_LEAVE_TYPES.filter((type) => leaveTypes.includes(type)),
       device: {
@@ -510,6 +533,8 @@ function App() {
   const [holidayYear, setHolidayYear] = useState<string>(() => data.settings.businessDate.slice(0, 4));
   const [newCompany, setNewCompany] = useState("");
   const [newDepartment, setNewDepartment] = useState("");
+  const [newPosition, setNewPosition] = useState("");
+  const [newNationality, setNewNationality] = useState("");
   const [newLeaveType, setNewLeaveType] = useState("");
   const [leaveDraft, setLeaveDraft] = useState({
     employeeId: selectedEmployeeId,
@@ -776,10 +801,10 @@ function App() {
       birthDate: "",
       birthPlace: "",
       address: "",
-      nationality: "Malaysia",
+      nationality: data.settings.nationalities[0] ?? "Malaysia",
       company: data.settings.companies[0] ?? "",
       department: data.settings.departments[0] ?? "",
-      position: "",
+      position: data.settings.positions[0] ?? "",
       joinDate: data.settings.businessDate,
       shiftId: data.shifts[0]?.id ?? "",
       autoShift: false,
@@ -1074,7 +1099,7 @@ function App() {
     setData((current) => ({ ...current, leaves: current.leaves.filter((leave) => leave.id !== id) }));
   }
 
-  function addSettingItem(kind: "companies" | "departments" | "leaveTypes", value: string) {
+  function addSettingItem(kind: "companies" | "departments" | "positions" | "nationalities" | "leaveTypes", value: string) {
     const clean = kind === "companies" ? value.trim() : normalizeDataValue(value.trim());
     if (!clean) return;
     setData((current) => ({
@@ -1089,7 +1114,7 @@ function App() {
     }));
   }
 
-  function removeSettingItem(kind: "companies" | "departments" | "leaveTypes", value: string) {
+  function removeSettingItem(kind: "companies" | "departments" | "positions" | "nationalities" | "leaveTypes", value: string) {
     const clean = kind === "companies" ? value : normalizeDataValue(value);
     setData((current) => ({
       ...current,
@@ -2065,7 +2090,14 @@ function App() {
               <Field label={t("idNoLabel")}><input value={selectedEmployee.idNo} onChange={(event) => patchEmployee(selectedEmployee.id, { idNo: event.target.value })} /></Field>
               <Field label={t("birthDateLabel")}><input type="date" value={selectedEmployee.birthDate} onChange={(event) => patchEmployee(selectedEmployee.id, { birthDate: event.target.value })} /></Field>
               <Field label={t("birthPlaceLabel")}><input value={selectedEmployee.birthPlace} onChange={(event) => patchEmployee(selectedEmployee.id, { birthPlace: event.target.value })} /></Field>
-              <Field label={t("nationalityLabel")}><input value={selectedEmployee.nationality} onChange={(event) => patchEmployee(selectedEmployee.id, { nationality: event.target.value })} /></Field>
+              <Field label={t("nationalityLabel")}>
+                <select value={selectedEmployee.nationality} onChange={(event) => patchEmployee(selectedEmployee.id, { nationality: event.target.value })}>
+                  {selectedEmployee.nationality && !data.settings.nationalities.includes(selectedEmployee.nationality) ? (
+                    <option value={selectedEmployee.nationality}>{translateDataValue(selectedEmployee.nationality, lang)}</option>
+                  ) : null}
+                  {data.settings.nationalities.map((nationality) => <option key={nationality} value={nationality}>{translateDataValue(nationality, lang)}</option>)}
+                </select>
+              </Field>
             </div>
             <Field label={t("addressLabel")}><textarea rows={2} value={selectedEmployee.address} onChange={(event) => patchEmployee(selectedEmployee.id, { address: event.target.value })} /></Field>
           </section>
@@ -2083,7 +2115,14 @@ function App() {
                   {data.settings.departments.map((department) => <option key={department} value={department}>{translateDataValue(department, lang)}</option>)}
                 </select>
               </Field>
-              <Field label={t("positionLabel")}><input value={translateDataValue(selectedEmployee.position, lang)} onChange={(event) => patchEmployee(selectedEmployee.id, { position: event.target.value })} /></Field>
+              <Field label={t("positionLabel")}>
+                <select value={selectedEmployee.position} onChange={(event) => patchEmployee(selectedEmployee.id, { position: event.target.value })}>
+                  {selectedEmployee.position && !data.settings.positions.includes(selectedEmployee.position) ? (
+                    <option value={selectedEmployee.position}>{translateDataValue(selectedEmployee.position, lang)}</option>
+                  ) : null}
+                  {data.settings.positions.map((position) => <option key={position} value={position}>{translateDataValue(position, lang)}</option>)}
+                </select>
+              </Field>
               <Field label={t("joinDateLabel")}><input type="date" value={selectedEmployee.joinDate} onChange={(event) => patchEmployee(selectedEmployee.id, { joinDate: event.target.value })} /></Field>
             </div>
           </section>
@@ -3778,88 +3817,121 @@ function App() {
     const emptyHint = t("settingListEmpty");
     return (
       <div className="view-stack">
-        <section className="panel settings-grid">
-          <SettingList
-            title={t("settingListCompanies")}
-            addPlaceholder={t("settingListAddCompany")}
-            items={data.settings.companies}
-            value={newCompany}
-            onValue={setNewCompany}
-            onAdd={() => { addSettingItem("companies", newCompany); setNewCompany(""); }}
-            onRemove={(value) => removeSettingItem("companies", value)}
-            renderItem={(item) => translateDataValue(item, lang)}
-            emptyHint={emptyHint}
-            deleteAria={deleteAria}
-          />
-          <SettingList
-            title={t("settingListDepartments")}
-            addPlaceholder={t("settingListAddDepartment")}
-            items={data.settings.departments}
-            value={newDepartment}
-            onValue={setNewDepartment}
-            onAdd={() => { addSettingItem("departments", newDepartment); setNewDepartment(""); }}
-            onRemove={(value) => removeSettingItem("departments", value)}
-            renderItem={(item) => translateDataValue(item, lang)}
-            emptyHint={emptyHint}
-            deleteAria={deleteAria}
-          />
-          <div className="setting-list-block">
-            <header className="setting-list-head">
-              <strong>{t("settingListLeaveTypes")}</strong>
-              <span className="setting-list-count">{data.settings.leaveTypes.length}</span>
-            </header>
-            <ul className="setting-list-rows">
-              {data.settings.leaveTypes.length === 0 ? (
-                <li className="setting-list-empty">{emptyHint}</li>
-              ) : (
-                data.settings.leaveTypes.map((type) => {
-                  const paid = isPaidLeaveType(type, data);
-                  return (
-                    <li key={type} className="setting-list-row leave-type-row">
-                      <span className="setting-list-row-label">{translateDataValue(type, lang)}</span>
-                      <span className="pay-rule-toggle" aria-label={t("salaryLeaveDeduct")}>
+        <section className="panel settings-list-panel">
+          <header className="settings-list-intro">
+            <div>
+              <p className="overview-headline-eyebrow">{t("settingsTabLists")}</p>
+              <h2>{t("settingMasterListsTitle")}</h2>
+              <p>{t("settingMasterListsHint")}</p>
+            </div>
+          </header>
+          <div className="settings-grid">
+            <SettingList
+              title={t("settingListCompanies")}
+              addPlaceholder={t("settingListAddCompany")}
+              items={data.settings.companies}
+              value={newCompany}
+              onValue={setNewCompany}
+              onAdd={() => { addSettingItem("companies", newCompany); setNewCompany(""); }}
+              onRemove={(value) => removeSettingItem("companies", value)}
+              renderItem={(item) => translateDataValue(item, lang)}
+              emptyHint={emptyHint}
+              deleteAria={deleteAria}
+            />
+            <SettingList
+              title={t("settingListDepartments")}
+              addPlaceholder={t("settingListAddDepartment")}
+              items={data.settings.departments}
+              value={newDepartment}
+              onValue={setNewDepartment}
+              onAdd={() => { addSettingItem("departments", newDepartment); setNewDepartment(""); }}
+              onRemove={(value) => removeSettingItem("departments", value)}
+              renderItem={(item) => translateDataValue(item, lang)}
+              emptyHint={emptyHint}
+              deleteAria={deleteAria}
+            />
+            <SettingList
+              title={t("settingListPositions")}
+              addPlaceholder={t("settingListAddPosition")}
+              items={data.settings.positions}
+              value={newPosition}
+              onValue={setNewPosition}
+              onAdd={() => { addSettingItem("positions", newPosition); setNewPosition(""); }}
+              onRemove={(value) => removeSettingItem("positions", value)}
+              renderItem={(item) => translateDataValue(item, lang)}
+              emptyHint={emptyHint}
+              deleteAria={deleteAria}
+            />
+            <SettingList
+              title={t("settingListNationalities")}
+              addPlaceholder={t("settingListAddNationality")}
+              items={data.settings.nationalities}
+              value={newNationality}
+              onValue={setNewNationality}
+              onAdd={() => { addSettingItem("nationalities", newNationality); setNewNationality(""); }}
+              onRemove={(value) => removeSettingItem("nationalities", value)}
+              renderItem={(item) => translateDataValue(item, lang)}
+              emptyHint={emptyHint}
+              deleteAria={deleteAria}
+            />
+            <div className="setting-list-block">
+              <header className="setting-list-head">
+                <strong>{t("settingListLeaveTypes")}</strong>
+                <span className="setting-list-count">{data.settings.leaveTypes.length}</span>
+              </header>
+              <ul className="setting-list-rows">
+                {data.settings.leaveTypes.length === 0 ? (
+                  <li className="setting-list-empty">{emptyHint}</li>
+                ) : (
+                  data.settings.leaveTypes.map((type) => {
+                    const paid = isPaidLeaveType(type, data);
+                    return (
+                      <li key={type} className="setting-list-row leave-type-row">
+                        <span className="setting-list-row-label">{translateDataValue(type, lang)}</span>
+                        <span className="pay-rule-toggle" aria-label={t("salaryLeaveDeduct")}>
+                          <button
+                            type="button"
+                            className={cx(paid && "pay-rule-active")}
+                            onClick={() => setLeaveTypePaid(type, true)}
+                          >
+                            {t("leavePayRulePaid")}
+                          </button>
+                          <button
+                            type="button"
+                            className={cx(!paid && "pay-rule-active")}
+                            onClick={() => setLeaveTypePaid(type, false)}
+                          >
+                            {t("leavePayRuleDeduct")}
+                          </button>
+                        </span>
                         <button
                           type="button"
-                          className={cx(paid && "pay-rule-active")}
-                          onClick={() => setLeaveTypePaid(type, true)}
+                          className="setting-list-row-delete"
+                          onClick={() => removeSettingItem("leaveTypes", type)}
+                          aria-label={deleteAria}
+                          title={deleteAria}
                         >
-                          {t("leavePayRulePaid")}
+                          <Trash2 size={14} aria-hidden="true" />
                         </button>
-                        <button
-                          type="button"
-                          className={cx(!paid && "pay-rule-active")}
-                          onClick={() => setLeaveTypePaid(type, false)}
-                        >
-                          {t("leavePayRuleDeduct")}
-                        </button>
-                      </span>
-                      <button
-                        type="button"
-                        className="setting-list-row-delete"
-                        onClick={() => removeSettingItem("leaveTypes", type)}
-                        aria-label={deleteAria}
-                        title={deleteAria}
-                      >
-                        <Trash2 size={14} aria-hidden="true" />
-                      </button>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-            <form
-              className="setting-list-add"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (newLeaveType.trim()) {
-                  addSettingItem("leaveTypes", newLeaveType);
-                  setNewLeaveType("");
-                }
-              }}
-            >
-              <input value={newLeaveType} onChange={(event) => setNewLeaveType(event.target.value)} placeholder={t("settingListAddLeaveType")} />
-              <Button icon={Plus} type="submit" disabled={!newLeaveType.trim()} />
-            </form>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+              <form
+                className="setting-list-add"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (newLeaveType.trim()) {
+                    addSettingItem("leaveTypes", newLeaveType);
+                    setNewLeaveType("");
+                  }
+                }}
+              >
+                <input value={newLeaveType} onChange={(event) => setNewLeaveType(event.target.value)} placeholder={t("settingListAddLeaveType")} />
+                <Button icon={Plus} type="submit" disabled={!newLeaveType.trim()} />
+              </form>
+            </div>
           </div>
         </section>
       </div>

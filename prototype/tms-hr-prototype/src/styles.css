@@ -2477,7 +2477,35 @@ input[type="color"] {
 }
 
 .settings-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.settings-list-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-list-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-list-intro h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.settings-list-intro p:last-child {
+  max-width: 680px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .permission-stack {
@@ -3110,6 +3138,12 @@ tbody tr:hover {
   flex-direction: column;
   gap: 10px;
   min-width: 0;
+  min-height: 260px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(31, 50, 45, 0.04);
 }
 
 .setting-list-head {
@@ -3142,6 +3176,7 @@ tbody tr:hover {
   padding: 0;
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .setting-list-row {
@@ -3149,12 +3184,16 @@ tbody tr:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 4px;
-  border-bottom: 1px dashed rgba(31, 50, 45, 0.08);
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: #f8fbf8;
   font-size: 13.5px;
 }
 
 .leave-type-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
 }
 
@@ -3184,7 +3223,7 @@ tbody tr:hover {
 }
 
 .setting-list-row:last-child {
-  border-bottom: 0;
+  border-bottom: 1px solid transparent;
 }
 
 .setting-list-row-label {
@@ -3226,6 +3265,7 @@ tbody tr:hover {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+  margin-top: auto;
   padding-top: 8px;
   border-top: 1px solid var(--line);
 }
@@ -3557,6 +3597,7 @@ tbody tr:hover {
   .payroll-preview-header,
   .payroll-export-status,
   .holiday-table-head,
+  .settings-list-intro,
   .setting-list-head {
     align-items: flex-start;
     flex-wrap: wrap;
@@ -3669,6 +3710,26 @@ tbody tr:hover {
 
   .setting-list-add {
     grid-template-columns: 1fr;
+  }
+
+  .setting-list-block {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .setting-list-row,
+  .leave-type-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .leave-type-row .pay-rule-toggle {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .setting-list-row-delete {
+    align-self: center;
   }
 
   .pay-rule-toggle {

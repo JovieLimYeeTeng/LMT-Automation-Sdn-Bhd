@@ -138,6 +138,8 @@ export interface AppSettings {
   defaultMonth: string;
   companies: string[];
   departments: string[];
+  positions: string[];
+  nationalities: string[];
   leaveTypes: string[];
   paidLeaveTypes: string[];
   device: PunchDeviceSettings;

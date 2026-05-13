@@ -305,6 +305,8 @@ export function createSeedData(): AppData {
       defaultMonth: "2026-04",
       companies: ["Duo Demo Sdn Bhd", "Branch Two Sdn Bhd"],
       departments: ["餐饮", "办公室", "仓库"],
+      positions: ["Supervisor", "Service Crew", "HR Admin", "Store Assistant", "Part Time", "Night Operator"],
+      nationalities: ["Malaysia", "Singapore", "Indonesia", "China", "Bangladesh", "Nepal", "Myanmar"],
       leaveTypes: ["病假", "年假", "带薪假", "无薪假"],
       paidLeaveTypes: ["年假", "带薪假"],
       device: {

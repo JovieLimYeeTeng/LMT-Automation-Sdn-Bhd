@@ -435,12 +435,18 @@ export const dict = {
     noHolidaysHint: "该年份没有假期记录，新增后这里会显示。",
     settingListCompanies: "公司",
     settingListDepartments: "部门",
+    settingListPositions: "职位",
+    settingListNationalities: "国籍",
     settingListLeaveTypes: "请假类型",
     settingListAddCompany: "新增公司名",
     settingListAddDepartment: "新增部门名",
+    settingListAddPosition: "新增职位",
+    settingListAddNationality: "新增国籍",
     settingListAddLeaveType: "新增请假类型",
     settingListDelete: "删除",
     settingListEmpty: "还没有记录",
+    settingMasterListsTitle: "基础资料选项",
+    settingMasterListsHint: "HR 在员工资料里选择公司、部门、职位和国籍；请假类型会影响发薪前复核。",
     leavePayRulePaid: "带薪",
     leavePayRuleDeduct: "扣薪",
     holidayTableTitle: "已登记的假日",
@@ -657,7 +663,7 @@ export const dict = {
     settingsTabHolidays: "假日",
     settingsTabPermissions: "权限 / 偏好",
     settingsTabDevices: "设备",
-    settingsTabLists: "公司 / 部门 / 假类",
+    settingsTabLists: "员工选项 / 假类",
     settingsTabData: "数据备份",
   },
   en: {
@@ -1092,12 +1098,18 @@ export const dict = {
     noHolidaysHint: "No holidays for this year — added entries will appear here.",
     settingListCompanies: "Companies",
     settingListDepartments: "Departments",
+    settingListPositions: "Positions",
+    settingListNationalities: "Nationalities",
     settingListLeaveTypes: "Leave types",
     settingListAddCompany: "Add company name",
     settingListAddDepartment: "Add department name",
+    settingListAddPosition: "Add position",
+    settingListAddNationality: "Add nationality",
     settingListAddLeaveType: "Add leave type",
     settingListDelete: "Delete",
     settingListEmpty: "No entries yet",
+    settingMasterListsTitle: "Master data options",
+    settingMasterListsHint: "HR selects company, department, position, and nationality in employee profiles. Leave types affect payroll review.",
     leavePayRulePaid: "Paid",
     leavePayRuleDeduct: "Deduct",
     holidayTableTitle: "Recorded holidays",
@@ -1313,7 +1325,7 @@ export const dict = {
     settingsTabHolidays: "Holidays",
     settingsTabPermissions: "Permissions / Defaults",
     settingsTabDevices: "Devices",
-    settingsTabLists: "Companies / Departments / Leave types",
+    settingsTabLists: "Employee lists / Leave types",
     settingsTabData: "Data backup",
   },
 } as const;
@@ -1359,6 +1371,18 @@ const dataValuePairs: Array<[string, string]> = [
   ["迟到样例", "Late sample"],
   ["加班样例", "Overtime sample"],
   ["忘记打下班", "Forgot to punch out"],
+  ["主管", "Supervisor"],
+  ["服务员", "Service Crew"],
+  ["人事行政", "HR Admin"],
+  ["仓库助理", "Store Assistant"],
+  ["兼职", "Part Time"],
+  ["马来西亚", "Malaysia"],
+  ["新加坡", "Singapore"],
+  ["印度尼西亚", "Indonesia"],
+  ["中国", "China"],
+  ["孟加拉", "Bangladesh"],
+  ["尼泊尔", "Nepal"],
+  ["缅甸", "Myanmar"],
   ["夜班样例", "Night shift sample"],
   ["夜班午休", "Night shift lunch"],
   ["夜班跨天", "Night shift overnight"],
@@ -1429,6 +1453,18 @@ export function normalizeDataValue(value: string): string {
   if (repaired === "迟到样例" || repaired === "Late sample") return "Late sample";
   if (repaired === "加班样例" || repaired === "Overtime sample") return "Overtime sample";
   if (repaired === "忘记打下班" || repaired === "Forgot to punch out") return "Forgot to punch out";
+  if (repaired === "主管" || repaired === "Supervisor") return "Supervisor";
+  if (repaired === "服务员" || repaired === "Service Crew") return "Service Crew";
+  if (repaired === "人事行政" || repaired === "HR Admin") return "HR Admin";
+  if (repaired === "仓库助理" || repaired === "Store Assistant") return "Store Assistant";
+  if (repaired === "兼职" || repaired === "Part Time") return "Part Time";
+  if (repaired === "马来西亚" || repaired === "Malaysia") return "Malaysia";
+  if (repaired === "新加坡" || repaired === "Singapore") return "Singapore";
+  if (repaired === "印度尼西亚" || repaired === "Indonesia") return "Indonesia";
+  if (repaired === "中国" || repaired === "China") return "China";
+  if (repaired === "孟加拉" || repaired === "Bangladesh") return "Bangladesh";
+  if (repaired === "尼泊尔" || repaired === "Nepal") return "Nepal";
+  if (repaired === "缅甸" || repaired === "Myanmar") return "Myanmar";
   if (repaired === "夜班样例" || repaired === "Night shift sample") return "Night shift sample";
   if (repaired === "夜班午休" || repaired === "Night shift lunch") return "Night shift lunch";
   if (repaired === "夜班跨天" || repaired === "Night shift overnight") return "Night shift overnight";

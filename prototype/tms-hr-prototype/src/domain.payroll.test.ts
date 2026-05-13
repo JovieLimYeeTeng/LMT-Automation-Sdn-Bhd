@@ -111,6 +111,8 @@ function appData(
       defaultMonth: "2026-04",
       companies: ["Demo Sdn Bhd"],
       departments: ["Ops"],
+      positions: ["Operator"],
+      nationalities: ["Malaysia"],
       leaveTypes: ["Annual leave", "Unpaid leave"],
       paidLeaveTypes: ["Annual leave"],
       device: { fingerprint: true, face: false, card: true, model: "" },
