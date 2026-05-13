@@ -3452,7 +3452,11 @@ function App() {
             {(["in", "breakOut", "breakIn", "out"] as PunchKind[]).map((kind) => (
               <Field key={kind} label={punchKindLabels[lang][kind]}>
                 <input
-                  type="time"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="HH:MM"
+                  pattern="[0-2][0-9]:[0-5][0-9]"
+                  maxLength={5}
                   value={punchTimes[kind]}
                   onChange={(event) => setPunchTimes((current) => ({ ...current, [kind]: event.target.value }))}
                 />
