@@ -316,27 +316,25 @@ export function sortByDateTime<T extends { date: string; time?: string }>(items:
 }
 
 export function normalizeShiftRules(shift: Shift): Shift {
-  if (!shift.flexibleWork || shift.graceMinutes === 0) return shift;
-  return { ...shift, graceMinutes: 0 };
+  if (!shift.flexibleWork) return shift;
+  return { ...shift, flexibleWork: false };
 }
 
 export function isAutoShiftCandidate(shift: Shift, date: string): boolean {
   const weekday = getWeekday(date);
-  return !shift.flexibleWork && !shift.days[weekday].off;
+  return !shift.days[weekday].off;
 }
 
 export function findShiftForPunch(
   shifts: Shift[],
   date: string,
   punchTime: string,
-  options: { includeFlexibleWork?: boolean } = {},
 ): Shift | undefined {
   const weekday = getWeekday(date);
   const punchMinutes = minutesFromTime(punchTime);
 
   return [...shifts]
     .filter((shift) => !shift.days[weekday].off)
-    .filter((shift) => options.includeFlexibleWork || !shift.flexibleWork)
     .sort((a, b) => {
       const aStart = minutesFromTime(a.days[weekday].start);
       const bStart = minutesFromTime(b.days[weekday].start);
@@ -352,16 +350,16 @@ export function resolveShiftForEmployee(
 ): { shift: Shift | undefined; source: ShiftSource } {
   if (shiftOverrideId) {
     const shift = data.shifts.find((item) => item.id === shiftOverrideId);
-    return { shift: shift && !(employee.autoShift && shift.flexibleWork) ? normalizeShiftRules(shift) : undefined, source: "override" };
+    return { shift: shift ? normalizeShiftRules(shift) : undefined, source: "override" };
   }
   const perDate = employee.shiftOverrides?.[date];
   if (perDate) {
     const shift = data.shifts.find((item) => item.id === perDate);
     if (shift) {
-      return { shift: employee.autoShift && shift.flexibleWork ? undefined : normalizeShiftRules(shift), source: "override" };
+      return { shift: normalizeShiftRules(shift), source: "override" };
     }
   }
-  if (employee.autoShift) {
+  if (employee.autoShift && !employee.flexibleWork) {
     const firstPunch = sortByDateTime(
       data.punches.filter((item) => item.employeeId === employee.id && item.date === date),
     )[0];
@@ -538,12 +536,14 @@ export function calculateAttendance(
   if (otEndMinutes <= otStartMinutes) otEndMinutes += 1440;
   const { lunchMinutes, lunchOverMinutes } = resolveLunch(employee, shift, schedule, breakOutPunch, breakInPunch, date);
   const workMinutes = Math.max(0, outMinutes - inMinutes - lunchMinutes);
+  const flexibleWork = employee.flexibleWork;
+  const requiredWorkHours = employee.workLengthHours || shift.workLengthHours;
   const lateMinutes =
-    employee.exemptions.late || shift.flexibleWork
+    employee.exemptions.late || flexibleWork
       ? 0
       : Math.max(0, inMinutes - startMinutes - shift.graceMinutes);
   const earlyMinutes =
-    employee.exemptions.early || shift.flexibleWork ? 0 : Math.max(0, endMinutes - outMinutes);
+    employee.exemptions.early || flexibleWork ? 0 : Math.max(0, endMinutes - outMinutes);
   const overtimeMinutes = employee.exemptions.overtime
     ? 0
     : Math.max(0, Math.min(outMinutes, otEndMinutes) - otStartMinutes);
@@ -553,7 +553,7 @@ export function calculateAttendance(
   if (earlyMinutes > 0) flags.push({ kind: "early", minutes: earlyMinutes });
   if (overtimeMinutes > 0) flags.push({ kind: "ot", minutes: overtimeMinutes });
   if (lunchOverMinutes > 0) flags.push({ kind: "lunchOver", minutes: lunchOverMinutes });
-  if (shift.flexibleWork && workMinutes < shift.workLengthHours * 60) {
+  if (flexibleWork && workMinutes < requiredWorkHours * 60) {
     const shortHoursDecision = getAttendanceReviewDecision(data, employee.id, date, "shortHours");
     flags.push({
       kind:
@@ -562,7 +562,7 @@ export function calculateAttendance(
           : shortHoursDecision === "deducted"
             ? "underWorkDeducted"
             : "underWork",
-      hours: shift.workLengthHours,
+      hours: requiredWorkHours,
     });
   }
 

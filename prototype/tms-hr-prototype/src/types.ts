@@ -57,6 +57,8 @@ export interface Employee {
   joinDate: string;
   shiftId: string;
   autoShift: boolean;
+  flexibleWork: boolean;
+  workLengthHours: number;
   restDays: Weekday[];
   shiftOverrides: Record<string, string>;
   restOverrides: Record<string, boolean>;

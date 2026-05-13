@@ -141,13 +141,16 @@ function buildNationalityList(raw: AppData, seed: AppData): string[] {
   ]);
 }
 
-function hydrateEmployee(raw: Employee): Employee {
+function hydrateEmployee(raw: Employee, legacyShift?: Shift): Employee {
+  const legacyFlexibleWork = Boolean(legacyShift?.flexibleWork);
   return {
     ...raw,
     nationality: normalizeDataValue(raw.nationality),
     department: normalizeDataValue(raw.department),
     position: normalizeDataValue(raw.position),
     autoShift: raw.autoShift ?? false,
+    flexibleWork: raw.flexibleWork ?? legacyFlexibleWork,
+    workLengthHours: raw.workLengthHours ?? legacyShift?.workLengthHours ?? 8,
     shiftOverrides: raw.shiftOverrides ?? {},
     restOverrides: raw.restOverrides ?? {},
     salary: raw.salary ?? {
@@ -166,6 +169,20 @@ function hydrateShift(raw: Shift): Shift {
     ...raw,
     name: normalizeDataValue(raw.name),
   });
+}
+
+function isLegacySeedShift(raw: Shift): boolean {
+  const monday = raw.days?.[1];
+  if (!monday) return false;
+  if (raw.id === "shift-office") return raw.flexibleWork || ["Admin shift", "行政班"].includes(raw.name);
+  if (raw.id === "shift-morning") return monday.start === "10:00" && monday.end === "18:00";
+  if (raw.id === "shift-afternoon") return monday.start === "14:00" && monday.end === "22:00";
+  if (raw.id === "shift-night") return monday.start === "22:00" && monday.end === "07:00";
+  return false;
+}
+
+function migrateSeedShift(raw: Shift, seedShift: Shift | undefined): Shift {
+  return seedShift && isLegacySeedShift(raw) ? seedShift : raw;
 }
 
 function hydrateLeave(raw: LeaveEntry): LeaveEntry {
@@ -188,14 +205,16 @@ function hydrateData(raw: AppData): AppData {
   const nationalities = buildNationalityList(raw, seed);
   const rawShiftIds = new Set(raw.shifts.map((shift) => shift.id));
   const rawEmployeeIds = new Set(raw.employees.map((employee) => employee.id));
+  const rawShiftById = new Map(raw.shifts.map((shift) => [shift.id, shift]));
+  const seedShiftById = new Map(seed.shifts.map((shift) => [shift.id, shift]));
   return {
     ...raw,
     employees: [
-      ...raw.employees.map(hydrateEmployee),
-      ...seed.employees.filter((employee) => !rawEmployeeIds.has(employee.id)).map(hydrateEmployee),
+      ...raw.employees.map((employee) => hydrateEmployee(employee, rawShiftById.get(employee.shiftId))),
+      ...seed.employees.filter((employee) => !rawEmployeeIds.has(employee.id)).map((employee) => hydrateEmployee(employee, seedShiftById.get(employee.shiftId))),
     ],
     shifts: [
-      ...raw.shifts.map(hydrateShift),
+      ...raw.shifts.map((shift) => hydrateShift(migrateSeedShift(shift, seedShiftById.get(shift.id)))),
       ...seed.shifts.filter((shift) => !rawShiftIds.has(shift.id)).map(hydrateShift),
     ],
     leaves: raw.leaves.map(hydrateLeave),
@@ -810,6 +829,8 @@ function App() {
       joinDate: data.settings.businessDate,
       shiftId: data.shifts[0]?.id ?? "",
       autoShift: false,
+      flexibleWork: false,
+      workLengthHours: 8,
       restDays: [0],
       shiftOverrides: {},
       restOverrides: {},
@@ -829,8 +850,6 @@ function App() {
       ...current,
       employees: current.employees.map((employee) => {
         if (employee.id !== employeeId) return employee;
-        const requestedShift = shiftId ? current.shifts.find((shift) => shift.id === shiftId) : undefined;
-        if (employee.autoShift && requestedShift?.flexibleWork) return employee;
         const next = { ...employee.shiftOverrides };
         if (shiftId) next[date] = shiftId;
         else delete next[date];
@@ -1028,7 +1047,8 @@ function App() {
 
   function loadDemoData() {
     const seed = createSeedData();
-    const seedEmployees = seed.employees.map(hydrateEmployee);
+    const seedShiftById = new Map(seed.shifts.map((shift) => [shift.id, shift]));
+    const seedEmployees = seed.employees.map((employee) => hydrateEmployee(employee, seedShiftById.get(employee.shiftId)));
     const seedShifts = seed.shifts.map(hydrateShift);
     const seedLeaves = seed.leaves.map(hydrateLeave);
     const seedPunches = seed.punches.map(hydratePunch);
@@ -2136,33 +2156,48 @@ function App() {
             <div className="form-grid three">
               <Field label={t("shiftLabel")}>
                 <select value={selectedEmployee.shiftId} onChange={(event) => patchEmployee(selectedEmployee.id, { shiftId: event.target.value })}>
-                  {data.shifts
-                    .filter((shift) => !selectedEmployee.autoShift || !shift.flexibleWork)
-                    .map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
+                  {data.shifts.map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
                 </select>
               </Field>
               <label className="toggle-line">
                 <input
                   type="checkbox"
                   checked={selectedEmployee.autoShift}
+                  disabled={selectedEmployee.flexibleWork}
                   onChange={(event) => {
                     const autoShift = event.target.checked;
-                    const currentShift = data.shifts.find((shift) => shift.id === selectedEmployee.shiftId);
-                    const firstFixedShift = data.shifts.find((shift) => !shift.flexibleWork);
-                    const shiftOverrides = autoShift
-                      ? Object.fromEntries(
-                          Object.entries(selectedEmployee.shiftOverrides).filter(([, shiftId]) => !data.shifts.find((shift) => shift.id === shiftId)?.flexibleWork),
-                        )
-                      : selectedEmployee.shiftOverrides;
                     patchEmployee(selectedEmployee.id, {
                       autoShift,
-                      shiftId: autoShift && currentShift?.flexibleWork && firstFixedShift ? firstFixedShift.id : selectedEmployee.shiftId,
-                      shiftOverrides,
                     });
                   }}
                 />
                 <span>{t("autoShiftLabel")}</span>
               </label>
+              <label className="toggle-line">
+                <input
+                  type="checkbox"
+                  checked={selectedEmployee.flexibleWork}
+                  onChange={(event) => {
+                    const flexibleWork = event.target.checked;
+                    patchEmployee(selectedEmployee.id, {
+                      flexibleWork,
+                      autoShift: flexibleWork ? false : selectedEmployee.autoShift,
+                    });
+                  }}
+                />
+                <span>{t("employeeFlexibleWorkToggle")}</span>
+              </label>
+              <Field label={t("employeeWorkLengthLabel")}>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.5"
+                  value={selectedEmployee.workLengthHours}
+                  disabled={!selectedEmployee.flexibleWork}
+                  onChange={(event) => patchEmployee(selectedEmployee.id, { workLengthHours: Number(event.target.value) })}
+                />
+                <small className="field-help">{t(selectedEmployee.flexibleWork ? "employeeFlexibleWorkHelp" : "employeeFlexibleWorkDisabledHelp")}</small>
+              </Field>
             </div>
             <div className="subsection-grid">
               <div>
@@ -2449,7 +2484,6 @@ function App() {
                   <th>{t("shiftFixedHoursLabel")}</th>
                   <th>{t("schedHeaderStart")}</th>
                   <th>{t("schedHeaderEnd")}</th>
-                  <th>{t("shiftFlexibleWorkToggle")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -2470,7 +2504,6 @@ function App() {
                       <td>{shift.workLengthHours}h</td>
                       <td>{scheduleTimeLabel(monSched, "start", lang)}</td>
                       <td>{scheduleTimeLabel(monSched, "end", lang)}</td>
-                      <td>{shift.flexibleWork ? "✓" : ""}</td>
                     </tr>
                   );
                 })}
@@ -2510,15 +2543,9 @@ function App() {
                 type="number"
                 min="0"
                 value={selectedShift.graceMinutes}
-                disabled={selectedShift.flexibleWork}
                 onChange={(event) => patchShift(selectedShift.id, { graceMinutes: Number(event.target.value) })}
               />
-              {selectedShift.flexibleWork ? <small className="field-help">{t("shiftGraceDisabledForFlexible")}</small> : null}
             </Field>
-            <label className="toggle-line">
-              <input type="checkbox" checked={selectedShift.flexibleWork} onChange={(event) => patchShift(selectedShift.id, { flexibleWork: event.target.checked })} />
-              <span>{t("shiftFlexibleWorkToggle")}</span>
-            </label>
             <label className="toggle-line">
               <input type="checkbox" checked={selectedShift.flexibleLunch} onChange={(event) => patchShift(selectedShift.id, { flexibleLunch: event.target.checked })} />
               <span>{t("shiftFlexibleLunchToggle")}</span>
@@ -2953,11 +2980,9 @@ function App() {
                       ? t("autoShiftPlaceholder")
                       : `${t("defaultShiftPrefix")}${translateDataValue(data.shifts.find((shift) => shift.id === selectedEmployee.shiftId)?.name ?? "-", lang)}`}
                   </option>
-                  {data.shifts
-                    .filter((shift) => !selectedEmployee.autoShift || !shift.flexibleWork)
-                    .map((shift) => (
-                      <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>
-                    ))}
+                  {data.shifts.map((shift) => (
+                    <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>
+                  ))}
                 </select>
               </Field>
               <Field label={t("dayRestSelectLabel")} compact>
