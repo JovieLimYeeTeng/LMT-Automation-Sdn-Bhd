@@ -115,6 +115,7 @@ function appData(
     leaves,
     punches,
     attendanceReviews,
+    timecardCorrectionAudits: [],
     settings: {
       businessDate,
       defaultMonth: "2026-04",
@@ -124,6 +125,7 @@ function appData(
       nationalities: ["Malaysia"],
       leaveTypes: ["Annual leave", "Unpaid leave"],
       paidLeaveTypes: ["Annual leave"],
+      correctionReasons: ["Forgot punch in", "Forgot punch out"],
       device: { fingerprint: true, face: false, card: true, model: "" },
       requirePassword: false,
       usbLicenseRequired: false,

@@ -39,13 +39,11 @@ import {
 import {
   calculateAttendance,
   DEFAULT_PAID_LEAVE_TYPES,
-  attendanceReviewId,
   displayEmployeeName,
   findShiftForPunch,
   formatDuration,
   formatFlags,
   formatHours,
-  getAttendanceReviewDecision,
   getMonthlyReadiness,
   getRecordsForMonth,
   getWeekday,
@@ -78,7 +76,6 @@ import {
 import type {
   AppData,
   AttendanceReview,
-  AttendanceReviewDecision,
   AttendanceRecord,
   DaySchedule,
   Employee,
@@ -87,6 +84,8 @@ import type {
   Punch,
   PunchKind,
   Shift,
+  TimecardCorrectionAudit,
+  TimecardCorrectionAuditPunch,
   Weekday,
 } from "./types";
 
@@ -138,6 +137,13 @@ function buildNationalityList(raw: AppData, seed: AppData): string[] {
     ...seed.settings.nationalities,
     ...raw.employees.map((employee) => employee.nationality),
     ...seed.employees.map((employee) => employee.nationality),
+  ]);
+}
+
+function buildCorrectionReasonList(raw: AppData, seed: AppData): string[] {
+  return normalizeDataList([
+    ...(raw.settings.correctionReasons ?? []),
+    ...seed.settings.correctionReasons,
   ]);
 }
 
@@ -197,12 +203,17 @@ function hydrateAttendanceReview(raw: AttendanceReview): AttendanceReview {
   return { ...raw, note: normalizeDataValue(raw.note) };
 }
 
+function hydrateTimecardCorrectionAudit(raw: TimecardCorrectionAudit): TimecardCorrectionAudit {
+  return { ...raw, reason: normalizeDataValue(raw.reason) };
+}
+
 function hydrateData(raw: AppData): AppData {
   const leaveTypes = normalizeDataList(raw.settings.leaveTypes);
   const paidLeaveTypes = normalizeDataList(raw.settings.paidLeaveTypes);
   const seed = createSeedData();
   const positions = buildPositionList(raw, seed);
   const nationalities = buildNationalityList(raw, seed);
+  const correctionReasons = buildCorrectionReasonList(raw, seed);
   const rawShiftIds = new Set(raw.shifts.map((shift) => shift.id));
   const rawEmployeeIds = new Set(raw.employees.map((employee) => employee.id));
   const rawShiftById = new Map(raw.shifts.map((shift) => [shift.id, shift]));
@@ -220,6 +231,7 @@ function hydrateData(raw: AppData): AppData {
     leaves: raw.leaves.map(hydrateLeave),
     punches: raw.punches.map(hydratePunch),
     attendanceReviews: (raw.attendanceReviews ?? []).map(hydrateAttendanceReview),
+    timecardCorrectionAudits: (raw.timecardCorrectionAudits ?? []).map(hydrateTimecardCorrectionAudit),
     settings: {
       ...raw.settings,
       departments: normalizeDataList(raw.settings.departments),
@@ -227,6 +239,7 @@ function hydrateData(raw: AppData): AppData {
       nationalities,
       leaveTypes,
       paidLeaveTypes: paidLeaveTypes.length ? paidLeaveTypes : DEFAULT_PAID_LEAVE_TYPES.filter((type) => leaveTypes.includes(type)),
+      correctionReasons,
       device: {
         ...defaultDeviceSettings,
         ...(raw.settings.device ?? {}),
@@ -275,7 +288,7 @@ function loadInitialData(): AppData {
     try { return hydrateData(JSON.parse(saved) as AppData); }
     catch { return createSeedData(); }
   })();
-  return { ...base, punches: [], leaves: [], attendanceReviews: [] };
+  return { ...base, punches: [], leaves: [], attendanceReviews: [], timecardCorrectionAudits: [] };
 }
 
 function cx(...parts: Array<string | false | undefined>): string {
@@ -416,6 +429,47 @@ function scheduleTimeLabel(schedule: DaySchedule | undefined, key: keyof Pick<Da
     : value;
 }
 
+function auditPunchSnapshot(punches: Punch[]): TimecardCorrectionAuditPunch[] {
+  return punches.map((punch) => ({
+    kind: punch.kind,
+    date: punch.date,
+    time: punch.time,
+    source: punch.source,
+    note: punch.note,
+  }));
+}
+
+function auditPunchSummary(punches: TimecardCorrectionAuditPunch[], lang: Lang): string {
+  if (punches.length === 0) return "-";
+  return punches
+    .map((punch) => `${punchKindLabels[lang][punch.kind]} ${punch.date} ${punch.time}`)
+    .join(" / ");
+}
+
+function auditChangedAt(value: string, lang: Lang): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(lang === "zh" ? "zh-CN" : "en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function correctionReasonText(reason: string, detail: string): string {
+  const cleanReason = normalizeDataValue(reason.trim());
+  const cleanDetail = detail.trim();
+  return cleanDetail ? `${cleanReason}: ${cleanDetail}` : cleanReason;
+}
+
+function displayCorrectionReason(reason: string, lang: Lang): string {
+  const [base, ...detail] = reason.split(": ");
+  const translatedBase = translateDataValue(base, lang);
+  return detail.length ? `${translatedBase}: ${detail.join(": ")}` : translatedBase;
+}
+
 function csvEscape(value: unknown): string {
   const text = String(value ?? "");
   if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
@@ -524,7 +578,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(data.settings.businessDate);
   const [punchTimes, setPunchTimes] = useState<Record<PunchKind, string>>(emptyPunchTimes);
   const [punchNote, setPunchNote] = useState("");
-  const [shortHoursDecision, setShortHoursDecision] = useState<"" | AttendanceReviewDecision>("");
+  const [punchNoteError, setPunchNoteError] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [savedToast, setSavedToast] = useState<{ id: number; text: string } | null>(null);
   const showSavedToast = (text: string = t("savedToast")) => {
@@ -557,6 +611,7 @@ function App() {
   const [newPosition, setNewPosition] = useState("");
   const [newNationality, setNewNationality] = useState("");
   const [newLeaveType, setNewLeaveType] = useState("");
+  const [newCorrectionReason, setNewCorrectionReason] = useState("");
   const [leaveDraft, setLeaveDraft] = useState({
     employeeId: selectedEmployeeId,
     date: data.settings.businessDate,
@@ -567,6 +622,7 @@ function App() {
   const [otSimEmployeeId, setOtSimEmployeeId] = useState(selectedEmployeeId);
   const [otSimDate, setOtSimDate] = useState(data.settings.businessDate);
   const [otSimClockOut, setOtSimClockOut] = useState("23:00");
+  const [correctionReason, setCorrectionReason] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const restoreInputRef = useRef<HTMLInputElement>(null);
   const initialDataRef = useRef(true);
@@ -694,7 +750,6 @@ function App() {
         breakIn: record.breakIn,
         out: record.clockOut,
       });
-      setShortHoursDecision(getAttendanceReviewDecision(data, selectedEmployee.id, selectedDate, "shortHours") ?? "");
     }
   }, [data, selectedDate, selectedEmployee]);
 
@@ -888,6 +943,12 @@ function App() {
 
   function savePunchesForDate() {
     if (!selectedEmployee) return;
+    const reason = correctionReasonText(correctionReason, punchNote);
+    if (!reason) {
+      setPunchNoteError(t("timecardReasonRequired"));
+      return;
+    }
+    setPunchNoteError("");
     const currentRecord = calculateAttendance(data, selectedEmployee, selectedDate);
     const kinds: PunchKind[] = ["in", "breakOut", "breakIn", "out"];
     const nextPunches = kinds
@@ -899,9 +960,22 @@ function App() {
         time: punchTimes[kind],
         kind,
         source: "manual",
-        note: punchNote || t("manualCorrectionNote"),
+        note: reason,
       }));
     const currentRecordPunchIds = new Set(currentRecord.punches.map((punch) => punch.id));
+    const beforePunches = auditPunchSnapshot(currentRecord.punches);
+    const afterPunches = auditPunchSnapshot(nextPunches);
+    const audit: TimecardCorrectionAudit = {
+      id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      employeeId: selectedEmployee.id,
+      date: selectedDate,
+      action: "save",
+      actor: t("timecardAuditActorHr"),
+      reason,
+      changedAt: new Date().toISOString(),
+      beforePunches,
+      afterPunches,
+    };
 
     const nextData = {
       ...data,
@@ -912,28 +986,12 @@ function App() {
         }),
         ...nextPunches,
       ],
+      attendanceReviews: (data.attendanceReviews ?? []).filter((review) => {
+        return !(review.employeeId === selectedEmployee.id && review.date === selectedDate && review.kind === "shortHours");
+      }),
+      timecardCorrectionAudits: [...(data.timecardCorrectionAudits ?? []), audit],
     };
-    const nextRecordBeforeReview = calculateAttendance(nextData, selectedEmployee, selectedDate);
-    const reviewableShortHours = nextRecordBeforeReview.flags.some((flag) => flag.kind === "underWork" || flag.kind === "underWorkAccepted");
-    const reviewId = attendanceReviewId(selectedEmployee.id, selectedDate, "shortHours");
-    const reviewedData = {
-      ...nextData,
-      attendanceReviews: [
-        ...(nextData.attendanceReviews ?? []).filter((review) => review.id !== reviewId),
-        ...(shortHoursDecision && reviewableShortHours
-          ? [{
-              id: reviewId,
-              employeeId: selectedEmployee.id,
-              date: selectedDate,
-              kind: "shortHours" as const,
-              decision: shortHoursDecision,
-              note: punchNote || (shortHoursDecision === "deducted" ? t("shortHoursDeductedDefaultNote") : t("shortHoursAcceptedDefaultNote")),
-              updatedAt: new Date().toISOString(),
-            }]
-          : []),
-      ],
-    };
-    const nextRecord = calculateAttendance(reviewedData, selectedEmployee, selectedDate);
+    const nextRecord = calculateAttendance(nextData, selectedEmployee, selectedDate);
     const stillPending =
       nextRecord.status === "absent" ||
       nextRecord.status === "incomplete" ||
@@ -942,21 +1000,43 @@ function App() {
       nextRecord.overtimeMinutes > 0 ||
       nextRecord.flags.some((flag) => flag.kind === "lunchOver" || flag.kind === "underWork");
 
-    setData(reviewedData);
-    showSavedToast(stillPending ? t("timecardSavedStillPending") : shortHoursDecision && reviewableShortHours ? t("timecardSavedReviewed") : t("timecardSavedResolved"));
+    setData(nextData);
+    showSavedToast(stillPending ? t("timecardSavedStillPending") : t("timecardSavedResolved"));
+    setCorrectionReason("");
     setPunchNote("");
   }
 
   function clearPunchesForDate() {
     if (!selectedEmployee) return;
-    const currentRecordPunchIds = new Set(calculateAttendance(data, selectedEmployee, selectedDate).punches.map((punch) => punch.id));
+    const reason = correctionReasonText(correctionReason, punchNote);
+    if (!reason) {
+      setPunchNoteError(t("timecardReasonRequired"));
+      return;
+    }
+    setPunchNoteError("");
+    const currentRecord = calculateAttendance(data, selectedEmployee, selectedDate);
+    const currentRecordPunchIds = new Set(currentRecord.punches.map((punch) => punch.id));
+    const audit: TimecardCorrectionAudit = {
+      id: `audit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      employeeId: selectedEmployee.id,
+      date: selectedDate,
+      action: "clear",
+      actor: t("timecardAuditActorHr"),
+      reason,
+      changedAt: new Date().toISOString(),
+      beforePunches: auditPunchSnapshot(currentRecord.punches),
+      afterPunches: [],
+    };
     setData((current) => ({
       ...current,
       punches: current.punches.filter((punch) => {
         if (punch.employeeId !== selectedEmployee.id) return true;
         return !currentRecordPunchIds.has(punch.id);
       }),
+      timecardCorrectionAudits: [...(current.timecardCorrectionAudits ?? []), audit],
     }));
+    setCorrectionReason("");
+    setPunchNote("");
   }
 
   function punchUniqueKey(punch: Pick<Punch, "employeeId" | "date" | "kind"> & Partial<Pick<Punch, "rawDateTime" | "rawNo" | "time">>): string {
@@ -1071,6 +1151,7 @@ function App() {
         leaves: [...current.leaves.filter((leave) => !sampleLeaveIds.has(leave.id)), ...seedLeaves],
         punches: seedPunches,
         attendanceReviews: [],
+        timecardCorrectionAudits: [],
       };
     });
     setSelectedMonth(seed.settings.defaultMonth);
@@ -1085,7 +1166,7 @@ function App() {
   }
 
   function clearImportedPunches() {
-    setData((current) => ({ ...current, punches: [], leaves: [], attendanceReviews: [] }));
+    setData((current) => ({ ...current, punches: [], leaves: [], attendanceReviews: [], timecardCorrectionAudits: [] }));
     setImportMessage(t("demoClearedMessage"));
   }
 
@@ -1123,7 +1204,7 @@ function App() {
     setData((current) => ({ ...current, leaves: current.leaves.filter((leave) => leave.id !== id) }));
   }
 
-  function addSettingItem(kind: "companies" | "departments" | "positions" | "nationalities" | "leaveTypes", value: string) {
+  function addSettingItem(kind: "companies" | "departments" | "positions" | "nationalities" | "leaveTypes" | "correctionReasons", value: string) {
     const clean = kind === "companies" ? value.trim() : normalizeDataValue(value.trim());
     if (!clean) return;
     setData((current) => ({
@@ -1138,7 +1219,7 @@ function App() {
     }));
   }
 
-  function removeSettingItem(kind: "companies" | "departments" | "positions" | "nationalities" | "leaveTypes", value: string) {
+  function removeSettingItem(kind: "companies" | "departments" | "positions" | "nationalities" | "leaveTypes" | "correctionReasons", value: string) {
     const clean = kind === "companies" ? value : normalizeDataValue(value);
     setData((current) => ({
       ...current,
@@ -2714,7 +2795,9 @@ function App() {
     const shiftOverride = selectedEmployee?.shiftOverrides?.[selectedDate] ?? "";
     const restOverride = selectedEmployee?.restOverrides?.[selectedDate];
     const currentRestValue = restOverride === undefined ? "" : restOverride ? "rest" : "work";
-    const selectedShortHoursReviewable = selectedDateRecord?.flags.some((flag) => flag.kind === "underWork" || flag.kind === "underWorkAccepted" || flag.kind === "underWorkDeducted") ?? false;
+    const selectedTimecardAudits = (data.timecardCorrectionAudits ?? [])
+      .filter((audit) => audit.employeeId === selectedEmployeeId && audit.date === selectedDate)
+      .sort((a, b) => b.changedAt.localeCompare(a.changedAt));
     const reviewedItems = (data.attendanceReviews ?? [])
       .filter((review) => review.date.startsWith(selectedMonth))
       .map((review) => {
@@ -3025,32 +3108,6 @@ function App() {
             </div>
           ) : null}
 
-          {selectedShortHoursReviewable ? (
-            <div className={cx("short-hours-review-box", shortHoursDecision && "short-hours-review-box-accepted", shortHoursDecision === "deducted" && "short-hours-review-box-deducted")}>
-              <div>
-                <strong>{t("shortHoursReviewTitle")}</strong>
-                <small>{t("shortHoursReviewHint")}</small>
-              </div>
-              <div className="short-hours-review-options">
-                {[
-                  { value: "", label: t("reviewDecisionPending") },
-                  { value: "accepted", label: t("reviewDecisionAccept") },
-                  { value: "deducted", label: t("reviewDecisionDeduct") },
-                ].map((option) => (
-                  <label key={option.value}>
-                    <input
-                      type="radio"
-                      name="short-hours-decision"
-                      checked={shortHoursDecision === option.value}
-                      onChange={() => setShortHoursDecision(option.value as "" | AttendanceReviewDecision)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
           <div className="timecards-punches">
             {(["in", "breakOut", "breakIn", "out"] as PunchKind[]).map((kind) => (
               <Field key={kind} label={punchKindLabels[lang][kind]}>
@@ -3063,14 +3120,68 @@ function App() {
             ))}
           </div>
 
-          <Field label={t("colNote")}>
-            <input value={punchNote} onChange={(event) => setPunchNote(event.target.value)} placeholder={t("notePlaceholder")} />
-          </Field>
+          <div className="timecard-reason-grid">
+            <Field label={t("timecardReasonLabel")} required error={punchNoteError}>
+              <select
+                value={correctionReason}
+                onChange={(event) => {
+                  setCorrectionReason(event.target.value);
+                  if (punchNoteError) setPunchNoteError("");
+                }}
+              >
+                <option value="">{t("timecardReasonSelectPlaceholder")}</option>
+                {data.settings.correctionReasons.map((reason) => (
+                  <option key={reason} value={reason}>{translateDataValue(reason, lang)}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t("timecardReasonDetailLabel")}>
+              <input
+                value={punchNote}
+                onChange={(event) => setPunchNote(event.target.value)}
+                placeholder={t("notePlaceholder")}
+              />
+            </Field>
+          </div>
 
           <div className="timecards-actions">
             <Button icon={Save} onClick={savePunchesForDate}>{t("save")}</Button>
             <Button icon={Trash2} variant="ghost" onClick={clearPunchesForDate}>{t("clear")}</Button>
           </div>
+
+          <section className="timecard-audit-panel">
+            <SectionTitle title={t("timecardAuditTitle")} />
+            <p className="panel-caption">{t("timecardAuditCaption")}</p>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t("timecardAuditWhen")}</th>
+                    <th>{t("timecardAuditWho")}</th>
+                    <th>{t("timecardAuditAction")}</th>
+                    <th>{t("timecardAuditBefore")}</th>
+                    <th>{t("timecardAuditAfter")}</th>
+                    <th>{t("timecardAuditReason")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedTimecardAudits.map((audit) => (
+                    <tr key={audit.id}>
+                      <td>{auditChangedAt(audit.changedAt, lang)}</td>
+                      <td>{audit.actor}</td>
+                      <td>{audit.action === "clear" ? t("timecardAuditActionClear") : t("timecardAuditActionSave")}</td>
+                      <td>{auditPunchSummary(audit.beforePunches, lang)}</td>
+                      <td>{auditPunchSummary(audit.afterPunches, lang)}</td>
+                      <td>{displayCorrectionReason(audit.reason, lang)}</td>
+                    </tr>
+                  ))}
+                  {selectedTimecardAudits.length === 0 ? (
+                    <tr><td colSpan={6} className="empty-cell">{t("timecardAuditEmpty")}</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </section>
       </div>
     );
@@ -3922,6 +4033,18 @@ function App() {
               onValue={setNewNationality}
               onAdd={() => { addSettingItem("nationalities", newNationality); setNewNationality(""); }}
               onRemove={(value) => removeSettingItem("nationalities", value)}
+              renderItem={(item) => translateDataValue(item, lang)}
+              emptyHint={emptyHint}
+              deleteAria={deleteAria}
+            />
+            <SettingList
+              title={t("settingListCorrectionReasons")}
+              addPlaceholder={t("settingListAddCorrectionReason")}
+              items={data.settings.correctionReasons}
+              value={newCorrectionReason}
+              onValue={setNewCorrectionReason}
+              onAdd={() => { addSettingItem("correctionReasons", newCorrectionReason); setNewCorrectionReason(""); }}
+              onRemove={(value) => removeSettingItem("correctionReasons", value)}
               renderItem={(item) => translateDataValue(item, lang)}
               emptyHint={emptyHint}
               deleteAria={deleteAria}

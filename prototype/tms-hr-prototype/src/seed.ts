@@ -312,6 +312,7 @@ export function createSeedData(): AppData {
     ],
     punches: buildSeedPunches(),
     attendanceReviews: [],
+    timecardCorrectionAudits: [],
     settings: {
       businessDate: dateKey(new Date(2026, 3, 24)),
       defaultMonth: "2026-04",
@@ -321,6 +322,7 @@ export function createSeedData(): AppData {
       nationalities: ["Malaysia", "Singapore", "Indonesia", "China", "Bangladesh", "Nepal", "Myanmar"],
       leaveTypes: ["病假", "年假", "带薪假", "无薪假"],
       paidLeaveTypes: ["年假", "带薪假"],
+      correctionReasons: ["Forgot punch in", "Forgot punch out", "Wrong punch time", "Device issue", "Approved manual correction"],
       device: {
         fingerprint: true,
         face: false,

@@ -135,6 +135,26 @@ export interface AttendanceReview {
   updatedAt: string;
 }
 
+export interface TimecardCorrectionAuditPunch {
+  kind: PunchKind;
+  date: string;
+  time: string;
+  source: Punch["source"];
+  note: string;
+}
+
+export interface TimecardCorrectionAudit {
+  id: string;
+  employeeId: string;
+  date: string;
+  action: "save" | "clear";
+  actor: string;
+  reason: string;
+  changedAt: string;
+  beforePunches: TimecardCorrectionAuditPunch[];
+  afterPunches: TimecardCorrectionAuditPunch[];
+}
+
 export interface AppSettings {
   businessDate: string;
   defaultMonth: string;
@@ -144,6 +164,7 @@ export interface AppSettings {
   nationalities: string[];
   leaveTypes: string[];
   paidLeaveTypes: string[];
+  correctionReasons: string[];
   device: PunchDeviceSettings;
   requirePassword: boolean;
   usbLicenseRequired: boolean;
@@ -159,6 +180,7 @@ export interface AppData {
   leaves: LeaveEntry[];
   punches: Punch[];
   attendanceReviews: AttendanceReview[];
+  timecardCorrectionAudits: TimecardCorrectionAudit[];
   settings: AppSettings;
 }
 
