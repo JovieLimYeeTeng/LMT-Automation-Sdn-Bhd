@@ -55,6 +55,7 @@ import {
   minutesFromTime,
   parsePunchKind,
   payrollFor,
+  punchDateForAttendanceTime,
   punchKindLabels,
   statusLabels,
   summarizeEmployee,
@@ -67,11 +68,14 @@ import {
   LANG_STORAGE_KEY,
   loadInitialLang,
   makeT,
+  normalizeDataValue,
+  translate,
   translateDataValue,
   type Lang,
 } from "./i18n";
 import type {
   AppData,
+  AttendanceReview,
   AttendanceReviewDecision,
   AttendanceRecord,
   DaySchedule,
@@ -113,9 +117,15 @@ const defaultDeviceSettings = {
   model: "",
 };
 
+function normalizeDataList(values: string[] | undefined): string[] {
+  return Array.from(new Set((values ?? []).map(normalizeDataValue).filter(Boolean)));
+}
+
 function hydrateEmployee(raw: Employee): Employee {
   return {
     ...raw,
+    department: normalizeDataValue(raw.department),
+    position: normalizeDataValue(raw.position),
     autoShift: raw.autoShift ?? false,
     shiftOverrides: raw.shiftOverrides ?? {},
     restOverrides: raw.restOverrides ?? {},
@@ -133,21 +143,46 @@ function hydrateEmployee(raw: Employee): Employee {
 function hydrateShift(raw: Shift): Shift {
   return {
     ...raw,
-    name: raw.id === "shift-office" && (raw.name === "办公室" || raw.name === "Office") ? "行政班" : raw.name,
+    name: normalizeDataValue(raw.name),
   };
 }
 
+function hydrateLeave(raw: LeaveEntry): LeaveEntry {
+  return { ...raw, type: normalizeDataValue(raw.type), note: normalizeDataValue(raw.note) };
+}
+
+function hydratePunch(raw: Punch): Punch {
+  return { ...raw, note: normalizeDataValue(raw.note) };
+}
+
+function hydrateAttendanceReview(raw: AttendanceReview): AttendanceReview {
+  return { ...raw, note: normalizeDataValue(raw.note) };
+}
+
 function hydrateData(raw: AppData): AppData {
-  const leaveTypes = raw.settings.leaveTypes ?? [];
+  const leaveTypes = normalizeDataList(raw.settings.leaveTypes);
+  const paidLeaveTypes = normalizeDataList(raw.settings.paidLeaveTypes);
+  const seed = createSeedData();
+  const rawShiftIds = new Set(raw.shifts.map((shift) => shift.id));
+  const rawEmployeeIds = new Set(raw.employees.map((employee) => employee.id));
   return {
     ...raw,
-    employees: raw.employees.map(hydrateEmployee),
-    shifts: raw.shifts.map(hydrateShift),
-    attendanceReviews: raw.attendanceReviews ?? [],
+    employees: [
+      ...raw.employees.map(hydrateEmployee),
+      ...seed.employees.filter((employee) => !rawEmployeeIds.has(employee.id)).map(hydrateEmployee),
+    ],
+    shifts: [
+      ...raw.shifts.map(hydrateShift),
+      ...seed.shifts.filter((shift) => !rawShiftIds.has(shift.id)).map(hydrateShift),
+    ],
+    leaves: raw.leaves.map(hydrateLeave),
+    punches: raw.punches.map(hydratePunch),
+    attendanceReviews: (raw.attendanceReviews ?? []).map(hydrateAttendanceReview),
     settings: {
       ...raw.settings,
+      departments: normalizeDataList(raw.settings.departments),
       leaveTypes,
-      paidLeaveTypes: raw.settings.paidLeaveTypes ?? DEFAULT_PAID_LEAVE_TYPES.filter((type) => leaveTypes.includes(type)),
+      paidLeaveTypes: paidLeaveTypes.length ? paidLeaveTypes : DEFAULT_PAID_LEAVE_TYPES.filter((type) => leaveTypes.includes(type)),
       device: {
         ...defaultDeviceSettings,
         ...(raw.settings.device ?? {}),
@@ -156,8 +191,8 @@ function hydrateData(raw: AppData): AppData {
       usbToken: raw.settings.usbToken ?? "",
       localPasswordHint:
         raw.settings.localPasswordHint && raw.settings.localPasswordHint.trim().length > 0
-          ? raw.settings.localPasswordHint
-          : "默认密码 1234 / Default password 1234",
+          ? normalizeDataValue(raw.settings.localPasswordHint)
+          : "Default password 1234",
     },
   };
 }
@@ -304,6 +339,39 @@ function statusClass(status: string): string {
   return `status status-${status}`;
 }
 
+function recordPunchTime(record: AttendanceRecord, kind: PunchKind, lang: Lang): string {
+  const timeMap: Record<PunchKind, string> = {
+    in: record.clockIn,
+    breakOut: record.breakOut,
+    breakIn: record.breakIn,
+    out: record.clockOut,
+  };
+  const offsetMap: Record<PunchKind, number> = {
+    in: record.clockInDayOffset,
+    breakOut: record.breakOutDayOffset,
+    breakIn: record.breakInDayOffset,
+    out: record.clockOutDayOffset,
+  };
+  const time = timeMap[kind];
+  if (!time) return "";
+  const offset = offsetMap[kind] ?? 0;
+  return offset > 0 ? `${time} ${translate(lang, "nextDaySuffix", { count: offset })}` : time;
+}
+
+function scheduleCrossesMidnight(schedule: DaySchedule | undefined): boolean {
+  if (!schedule || schedule.off) return false;
+  return minutesFromTime(schedule.end) <= minutesFromTime(schedule.start);
+}
+
+function scheduleTimeLabel(schedule: DaySchedule | undefined, key: keyof Pick<DaySchedule, "start" | "lunchStart" | "lunchEnd" | "end" | "otStart" | "otEnd">, lang: Lang): string {
+  if (!schedule || schedule.off) return "-";
+  const value = String(schedule[key] || "");
+  if (!value) return "-";
+  return scheduleCrossesMidnight(schedule) && key !== "start" && minutesFromTime(value) < minutesFromTime(schedule.start)
+    ? `${value} ${translate(lang, "nextDaySuffix", { count: 1 })}`
+    : value;
+}
+
 function csvEscape(value: unknown): string {
   const text = String(value ?? "");
   if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
@@ -446,7 +514,7 @@ function App() {
   const [leaveDraft, setLeaveDraft] = useState({
     employeeId: selectedEmployeeId,
     date: data.settings.businessDate,
-    type: data.settings.leaveTypes[0] ?? translateDataValue("年假", lang),
+    type: data.settings.leaveTypes[0] ?? "Annual leave",
     hours: 8,
     note: "",
   });
@@ -772,23 +840,28 @@ function App() {
 
   function savePunchesForDate() {
     if (!selectedEmployee) return;
+    const currentRecord = calculateAttendance(data, selectedEmployee, selectedDate);
     const kinds: PunchKind[] = ["in", "breakOut", "breakIn", "out"];
     const nextPunches = kinds
       .filter((kind) => punchTimes[kind])
       .map<Punch>((kind) => ({
         id: makePunchId(selectedEmployee.id, selectedDate, kind),
         employeeId: selectedEmployee.id,
-        date: selectedDate,
+        date: punchDateForAttendanceTime(selectedDate, currentRecord.schedule, kind, punchTimes[kind]),
         time: punchTimes[kind],
         kind,
         source: "manual",
         note: punchNote || t("manualCorrectionNote"),
       }));
+    const currentRecordPunchIds = new Set(currentRecord.punches.map((punch) => punch.id));
 
     const nextData = {
       ...data,
       punches: [
-        ...data.punches.filter((punch) => !(punch.employeeId === selectedEmployee.id && punch.date === selectedDate)),
+        ...data.punches.filter((punch) => {
+          if (punch.employeeId !== selectedEmployee.id) return true;
+          return !currentRecordPunchIds.has(punch.id);
+        }),
         ...nextPunches,
       ],
     };
@@ -828,9 +901,13 @@ function App() {
 
   function clearPunchesForDate() {
     if (!selectedEmployee) return;
+    const currentRecordPunchIds = new Set(calculateAttendance(data, selectedEmployee, selectedDate).punches.map((punch) => punch.id));
     setData((current) => ({
       ...current,
-      punches: current.punches.filter((punch) => !(punch.employeeId === selectedEmployee.id && punch.date === selectedDate)),
+      punches: current.punches.filter((punch) => {
+        if (punch.employeeId !== selectedEmployee.id) return true;
+        return !currentRecordPunchIds.has(punch.id);
+      }),
     }));
   }
 
@@ -922,24 +999,38 @@ function App() {
 
   function loadDemoData() {
     const seed = createSeedData();
+    const seedEmployees = seed.employees.map(hydrateEmployee);
+    const seedShifts = seed.shifts.map(hydrateShift);
+    const seedLeaves = seed.leaves.map(hydrateLeave);
+    const seedPunches = seed.punches.map(hydratePunch);
     setData((current) => {
-      const sampleLeaveIds = new Set(seed.leaves.map((leave) => leave.id));
+      const sampleLeaveIds = new Set(seedLeaves.map((leave) => leave.id));
+      const currentEmployeeIds = new Set(current.employees.map((employee) => employee.id));
+      const currentShiftIds = new Set(current.shifts.map((shift) => shift.id));
       return {
         ...current,
         // Loading sample records must not overwrite HR's employee master data,
         // salaries, shifts, departments, holidays, or security settings.
-        leaves: [...current.leaves.filter((leave) => !sampleLeaveIds.has(leave.id)), ...seed.leaves],
-        punches: seed.punches,
+        employees: [
+          ...current.employees,
+          ...seedEmployees.filter((employee) => !currentEmployeeIds.has(employee.id)),
+        ],
+        shifts: [
+          ...current.shifts,
+          ...seedShifts.filter((shift) => !currentShiftIds.has(shift.id)),
+        ],
+        leaves: [...current.leaves.filter((leave) => !sampleLeaveIds.has(leave.id)), ...seedLeaves],
+        punches: seedPunches,
         attendanceReviews: [],
       };
     });
     setSelectedMonth(seed.settings.defaultMonth);
-    setSelectedDate(seed.settings.businessDate);
-    setSelectedEmployeeId(data.employees[0]?.id ?? seed.employees[0]?.id ?? "");
-    setSelectedShiftId(data.shifts[0]?.id ?? seed.shifts[0]?.id ?? "");
+    setSelectedDate("2026-04-01");
+    setSelectedEmployeeId("emp-006");
+    setSelectedShiftId("shift-night");
     setImportMessage(t("demoLoadedMessage", {
-      employees: data.employees.length || seed.employees.length,
-      shifts: data.shifts.length || seed.shifts.length,
+      employees: Math.max(data.employees.filter((employee) => employee.active).length, seed.employees.filter((employee) => employee.active).length),
+      shifts: Math.max(data.shifts.length, seed.shifts.length),
       punches: seed.punches.length,
     }));
   }
@@ -984,7 +1075,7 @@ function App() {
   }
 
   function addSettingItem(kind: "companies" | "departments" | "leaveTypes", value: string) {
-    const clean = value.trim();
+    const clean = kind === "companies" ? value.trim() : normalizeDataValue(value.trim());
     if (!clean) return;
     setData((current) => ({
       ...current,
@@ -999,23 +1090,25 @@ function App() {
   }
 
   function removeSettingItem(kind: "companies" | "departments" | "leaveTypes", value: string) {
+    const clean = kind === "companies" ? value : normalizeDataValue(value);
     setData((current) => ({
       ...current,
       settings: {
         ...current.settings,
-        [kind]: current.settings[kind].filter((item) => item !== value),
+        [kind]: current.settings[kind].filter((item) => item !== clean),
         ...(kind === "leaveTypes"
-          ? { paidLeaveTypes: current.settings.paidLeaveTypes.filter((item) => item !== value) }
+          ? { paidLeaveTypes: current.settings.paidLeaveTypes.filter((item) => item !== clean) }
           : {}),
       },
     }));
   }
 
   function setLeaveTypePaid(type: string, paid: boolean) {
+    const clean = normalizeDataValue(type);
     setData((current) => {
       const paidLeaveTypes = paid
-        ? Array.from(new Set([...current.settings.paidLeaveTypes, type]))
-        : current.settings.paidLeaveTypes.filter((item) => item !== type);
+        ? Array.from(new Set([...current.settings.paidLeaveTypes, clean]))
+        : current.settings.paidLeaveTypes.filter((item) => item !== clean);
       return { ...current, settings: { ...current.settings, paidLeaveTypes } };
     });
   }
@@ -1745,7 +1838,7 @@ function App() {
                       <td>{employee ? displayEmployeeName(employee) : "-"}</td>
                       <td>{punchKindLabels[lang][punch.kind]}</td>
                       <td>{punch.source}</td>
-                      <td>{punch.note || "-"}</td>
+                      <td>{punch.note ? translateDataValue(punch.note, lang) : "-"}</td>
                     </tr>
                   );
                 })}
@@ -1990,7 +2083,7 @@ function App() {
                   {data.settings.departments.map((department) => <option key={department} value={department}>{translateDataValue(department, lang)}</option>)}
                 </select>
               </Field>
-              <Field label={t("positionLabel")}><input value={selectedEmployee.position} onChange={(event) => patchEmployee(selectedEmployee.id, { position: event.target.value })} /></Field>
+              <Field label={t("positionLabel")}><input value={translateDataValue(selectedEmployee.position, lang)} onChange={(event) => patchEmployee(selectedEmployee.id, { position: event.target.value })} /></Field>
               <Field label={t("joinDateLabel")}><input type="date" value={selectedEmployee.joinDate} onChange={(event) => patchEmployee(selectedEmployee.id, { joinDate: event.target.value })} /></Field>
             </div>
           </section>
@@ -2188,8 +2281,8 @@ function App() {
                       <td>{record.date}</td>
                       <td><span className={statusClass(record.status)}>{statusLabels[lang][record.status]}</span></td>
                       <td>{formatFlags(record.flags, lang)}</td>
-                      <td>{record.clockIn || "-"}</td>
-                      <td>{record.clockOut || "-"}</td>
+                      <td>{recordPunchTime(record, "in", lang) || "-"}</td>
+                      <td>{recordPunchTime(record, "out", lang) || "-"}</td>
                       <td>{formatHours(record.workMinutes)}</td>
                       <td>
                         <Button icon={Wand2} variant="secondary" onClick={() => openTimecardDetail(record.employee.id, record.date)}>
@@ -2316,8 +2409,8 @@ function App() {
                       <td className="entity-row-key">{translateDataValue(shift.name, lang)}</td>
                       <td>{shift.code}</td>
                       <td>{shift.workLengthHours}h</td>
-                      <td>{monSched?.off ? "—" : monSched?.start || "-"}</td>
-                      <td>{monSched?.off ? "—" : monSched?.end || "-"}</td>
+                      <td>{scheduleTimeLabel(monSched, "start", lang)}</td>
+                      <td>{scheduleTimeLabel(monSched, "end", lang)}</td>
                       <td>{shift.flexibleWork ? "✓" : ""}</td>
                     </tr>
                   );
@@ -2392,9 +2485,12 @@ function App() {
                   return (
                     <tr key={day}>
                       <td>{weekdayLabels[lang][day]}</td>
-                      {(["start", "lunchStart", "lunchEnd", "end", "otStart", "otEnd"] as Array<keyof DaySchedule>).map((key) => (
+                      {(["start", "lunchStart", "lunchEnd", "end", "otStart", "otEnd"] as Array<keyof Pick<DaySchedule, "start" | "lunchStart" | "lunchEnd" | "end" | "otStart" | "otEnd">>).map((key) => (
                         <td key={key}>
                           <input type="time" value={String(schedule[key])} onChange={(event) => patchShiftDay(selectedShift.id, day, { [key]: event.target.value })} />
+                          {key !== "start" && scheduleTimeLabel(schedule, key, lang) !== String(schedule[key]) ? (
+                            <small className="overnight-note">{t("nextDaySuffix", { count: 1 })}</small>
+                          ) : null}
                         </td>
                       ))}
                       <td>
@@ -2610,7 +2706,7 @@ function App() {
                       <td>{review.date}</td>
                       <td>{employee.enrollNo} · {displayEmployeeName(employee)}</td>
                       <td><span className="mini-pill mini-pill-muted">{review.decision === "deducted" ? t("reviewDecisionDeduct") : t("reviewDecisionAccept")}</span></td>
-                      <td>{review.note || formatFlags(record.flags, lang)}</td>
+                      <td>{review.note ? translateDataValue(review.note, lang) : formatFlags(record.flags, lang)}</td>
                       <td>
                         <Button
                           icon={Wand2}
@@ -2970,7 +3066,7 @@ function App() {
                       <td>{employee ? displayEmployeeName(employee) : "-"}</td>
                       <td>{translateDataValue(leave.type, lang)}</td>
                       <td>{leave.hours}</td>
-                      <td>{leave.note || "-"}</td>
+                      <td>{leave.note ? translateDataValue(leave.note, lang) : "-"}</td>
                       <td><Button icon={Trash2} variant="ghost" onClick={() => removeLeave(leave.id)} /></td>
                     </tr>
                   );
@@ -3045,7 +3141,7 @@ function App() {
                     <td>{record.date}</td>
                     <td>{displayEmployeeName(record.employee)}</td>
                     <td>{record.shift?.name ? translateDataValue(record.shift.name, lang) : "-"}</td>
-                    <td>{record.clockOut}</td>
+                    <td>{recordPunchTime(record, "out", lang)}</td>
                     <td>{formatDuration(record.overtimeMinutes)}</td>
                     <td>{formatFlags(record.flags, lang)}</td>
                   </tr>
@@ -3933,7 +4029,12 @@ function buildReport(
       };
       days.forEach((date, index) => {
         const record = records.find((item) => item.employee.id === employee.id && item.date === date);
-        const times = record?.punches.map((punch) => punch.time).join(" / ") ?? "";
+        const times = record
+          ? (["in", "breakOut", "breakIn", "out"] as PunchKind[])
+              .map((kind) => recordPunchTime(record, kind, lang))
+              .filter(Boolean)
+              .join(" / ")
+          : "";
         const dayLabel = dayColumns[index];
         row[dayLabel] = times || (record ? statusLabels[lang][record.status] : "");
       });
@@ -3958,10 +4059,10 @@ function buildReport(
     const rows = employeeRecords.map((record) => ({
       [colDate]: record.date,
       [colWeekday]: weekdayLabels[lang][record.weekday],
-      [colS1In]: record.clockIn || "",
-      [colS1Out]: record.breakOut || "",
-      [colS2In]: record.breakIn || "",
-      [colS2Out]: record.clockOut || "",
+      [colS1In]: recordPunchTime(record, "in", lang),
+      [colS1Out]: recordPunchTime(record, "breakOut", lang),
+      [colS2In]: recordPunchTime(record, "breakIn", lang),
+      [colS2Out]: recordPunchTime(record, "out", lang),
       [colS3In]: "",
       [colS3Out]: "",
       [colStatus]: statusLabels[lang][record.status],
@@ -4038,7 +4139,7 @@ function buildReport(
         [colName]: displayEmployeeName(record.employee),
         [colDept]: translateDataValue(record.employee.department, lang),
         [colShift]: record.shift?.name ? translateDataValue(record.shift.name, lang) : "-",
-        [colOut]: record.clockOut,
+        [colOut]: recordPunchTime(record, "out", lang),
         [colOT]: formatDuration(record.overtimeMinutes),
       }));
     return { title: tr("reportOvertimeTitle"), columns, rows };

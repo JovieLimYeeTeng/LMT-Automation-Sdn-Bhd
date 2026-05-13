@@ -52,6 +52,7 @@ export const dict = {
     items: "条",
     countSuffix: "个",
     requiredFieldError: "必填",
+    nextDaySuffix: "+{count}天",
 
     // Overview
     metricActiveEmployees: "活跃员工",
@@ -117,7 +118,7 @@ export const dict = {
 
     // Import
     demoPanelTitle: "试用样例数据",
-    demoPanelHint: "刷新页面后打卡和请假会自动清空（让你每次演示都从干净状态开始）。点这里一键载入样例数据：4 名员工 + 3 个班次 + 整月打卡（含迟到 / 漏打卡 / 加班 / 旷工 / 请假样例），可直接走完导入 → 修正 → 报表 → 薪资全流程。",
+    demoPanelHint: "刷新页面后打卡和请假会自动清空（让你每次演示都从干净状态开始）。点这里一键载入样例数据：5 名在职员工 + 4 个班次（含夜班）+ 整月打卡（含迟到 / 漏打卡 / 加班 / 夜班跨天 / 旷工 / 请假样例），可直接走完导入 → 修正 → 报表 → 薪资全流程。",
     demoLoadButton: "载入样例数据",
     demoClearButton: "清空当前打卡 / 请假",
     demoLoadedMessage: "已载入样例数据：{employees} 名员工 · {shifts} 个班次 · {punches} 条打卡。",
@@ -708,6 +709,7 @@ export const dict = {
     items: "items",
     countSuffix: "",
     requiredFieldError: "Required",
+    nextDaySuffix: "+{count} day",
 
     // Overview
     metricActiveEmployees: "Active employees",
@@ -773,7 +775,7 @@ export const dict = {
 
     // Import
     demoPanelTitle: "Try sample data",
-    demoPanelHint: "Punches and leave entries are wiped on every page reload, so each demo starts from a clean state. Click here to load a one-month sample: 4 employees + 3 shifts + a full month of punches (with late / missing / overtime / absent / leave examples) — enough to walk through Import → Review → Reports → Payroll end to end.",
+    demoPanelHint: "Punches and leave entries are wiped on every page reload, so each demo starts from a clean state. Click here to load a one-month sample: 5 active employees + 4 shifts (including night shift) + a full month of punches (with late / missing / overtime / overnight / absent / leave examples) — enough to walk through Import → Review → Reports → Payroll end to end.",
     demoLoadButton: "Load sample data",
     demoClearButton: "Clear punches & leave",
     demoLoadedMessage: "Sample data loaded: {employees} employees · {shifts} shifts · {punches} punches.",
@@ -1311,7 +1313,7 @@ export const dict = {
     settingsTabHolidays: "Holidays",
     settingsTabPermissions: "Permissions / Defaults",
     settingsTabDevices: "Devices",
-    settingsTabLists: "Companies / Depts / Leave types",
+    settingsTabLists: "Companies / Departments / Leave types",
     settingsTabData: "Data backup",
   },
 } as const;
@@ -1349,6 +1351,7 @@ const dataValuePairs: Array<[string, string]> = [
   ["早班", "Morning"],
   ["午班", "Afternoon"],
   ["行政班", "Admin shift"],
+  ["夜班", "Night shift"],
   ["病假", "Sick leave"],
   ["年假", "Annual leave"],
   ["带薪假", "Paid leave"],
@@ -1356,15 +1359,89 @@ const dataValuePairs: Array<[string, string]> = [
   ["迟到样例", "Late sample"],
   ["加班样例", "Overtime sample"],
   ["忘记打下班", "Forgot to punch out"],
+  ["夜班样例", "Night shift sample"],
+  ["夜班午休", "Night shift lunch"],
+  ["夜班跨天", "Night shift overnight"],
+  ["夜班操作员", "Night Operator"],
+  ["已批准", "Approved"],
 ];
 
 const zhToEn = new Map(dataValuePairs);
 const enToZh = new Map(dataValuePairs.map(([zh, en]) => [en, zh] as const));
 
+const cp1252ByteMap: Record<number, number> = {
+  0x20ac: 0x80,
+  0x201a: 0x82,
+  0x0192: 0x83,
+  0x201e: 0x84,
+  0x2026: 0x85,
+  0x2020: 0x86,
+  0x2021: 0x87,
+  0x02c6: 0x88,
+  0x2030: 0x89,
+  0x0160: 0x8a,
+  0x2039: 0x8b,
+  0x0152: 0x8c,
+  0x017d: 0x8e,
+  0x2018: 0x91,
+  0x2019: 0x92,
+  0x201c: 0x93,
+  0x201d: 0x94,
+  0x2022: 0x95,
+  0x2013: 0x96,
+  0x2014: 0x97,
+  0x02dc: 0x98,
+  0x2122: 0x99,
+  0x0161: 0x9a,
+  0x203a: 0x9b,
+  0x0153: 0x9c,
+  0x017e: 0x9e,
+  0x0178: 0x9f,
+};
+
+function repairMojibake(value: string): string {
+  if (!/[ÃÂÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõöùúûüýþÿ“”‘’]/.test(value)) return value;
+  try {
+    const bytes = new Uint8Array(Array.from(value, (char) => {
+      const code = char.codePointAt(0) ?? 0;
+      return cp1252ByteMap[code] ?? (code & 0xff);
+    }));
+    const decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    return decoded.trim() ? decoded : value;
+  } catch {
+    return value;
+  }
+}
+
+export function normalizeDataValue(value: string): string {
+  const repaired = repairMojibake(value);
+  if (repaired === "餐饮" || repaired === "Catering") return "Catering";
+  if (repaired === "办公室" || repaired === "Office") return "Office";
+  if (repaired === "仓库" || repaired === "Warehouse") return "Warehouse";
+  if (repaired === "早班" || repaired === "Morning") return "Morning";
+  if (repaired === "午班" || repaired === "Afternoon") return "Afternoon";
+  if (repaired === "行政班" || repaired === "Admin shift") return "Admin shift";
+  if (repaired === "夜班" || repaired === "Night shift") return "Night shift";
+  if (repaired === "病假" || repaired === "Sick leave") return "Sick leave";
+  if (repaired === "年假" || repaired === "Annual leave") return "Annual leave";
+  if (repaired === "带薪假" || repaired === "Paid leave") return "Paid leave";
+  if (repaired === "无薪假" || repaired === "Unpaid leave") return "Unpaid leave";
+  if (repaired === "迟到样例" || repaired === "Late sample") return "Late sample";
+  if (repaired === "加班样例" || repaired === "Overtime sample") return "Overtime sample";
+  if (repaired === "忘记打下班" || repaired === "Forgot to punch out") return "Forgot to punch out";
+  if (repaired === "夜班样例" || repaired === "Night shift sample") return "Night shift sample";
+  if (repaired === "夜班午休" || repaired === "Night shift lunch") return "Night shift lunch";
+  if (repaired === "夜班跨天" || repaired === "Night shift overnight") return "Night shift overnight";
+  if (repaired === "夜班操作员" || repaired === "Night Operator") return "Night Operator";
+  if (repaired === "已批准" || repaired === "Approved") return "Approved";
+  return repaired;
+}
+
 export function translateDataValue(value: string, lang: Lang): string {
   if (!value) return value;
-  if (lang === "en") return zhToEn.get(value) ?? value;
-  return enToZh.get(value) ?? value;
+  const normalized = normalizeDataValue(value);
+  if (lang === "en") return zhToEn.get(normalized) ?? normalized;
+  return enToZh.get(normalized) ?? normalized;
 }
 
 export const LANG_STORAGE_KEY = "tms-lang";

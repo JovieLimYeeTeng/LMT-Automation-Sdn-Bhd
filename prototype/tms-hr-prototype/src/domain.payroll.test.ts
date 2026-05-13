@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attendanceReviewId, createStandardWeek, getMonthlyReadiness, payrollFor } from "./domain";
+import { attendanceReviewId, calculateAttendance, createStandardWeek, getMonthlyReadiness, payrollFor } from "./domain";
 import type { AppData, AttendanceReview, Employee, LeaveEntry, Punch, PunchKind, Shift } from "./types";
 
 const shift: Shift = {
@@ -20,6 +20,14 @@ const flexibleShift: Shift = {
   id: "shift-flex",
   name: "Flexible 8h",
   flexibleWork: true,
+};
+
+const nightShift: Shift = {
+  ...shift,
+  id: "shift-night",
+  name: "Night",
+  code: "N",
+  days: createStandardWeek("22:00", "02:00", "03:00", "07:00", "07:00", [0, 6]),
 };
 
 function employee(overrides: Partial<Employee> = {}): Employee {
@@ -305,6 +313,71 @@ describe("payrollFor", () => {
     expect(pay.totalMonthDays).toBe(30);
     expect(pay.base).toBe(1500);
     expect(pay.gross).toBe(1500);
+  });
+
+  it("counts an overnight shift under the shift start date", () => {
+    const person = employee({ shiftId: nightShift.id });
+    const punches = [
+      punch("in", "22:00", "2026-04-01"),
+      punch("breakOut", "02:00", "2026-04-02"),
+      punch("breakIn", "03:00", "2026-04-02"),
+      punch("out", "07:00", "2026-04-02"),
+    ];
+    const data = appData(person, punches, [], "2026-04-01", [nightShift]);
+    const record = calculateAttendance(data, person, "2026-04-01");
+
+    expect(record.overnight).toBe(true);
+    expect(record.clockOutDayOffset).toBe(1);
+    expect(record.workMinutes).toBe(480);
+    expect(record.status).toBe("present");
+    expect(payrollFor(data, person, "2026-04").workHours).toBe(8);
+  });
+
+  it("does not treat the next-morning out punch as a second work day", () => {
+    const person = employee({ shiftId: nightShift.id });
+    const punches = [
+      punch("in", "22:00", "2026-04-01"),
+      punch("out", "07:00", "2026-04-02"),
+    ];
+    const data = appData(person, punches, [], "2026-04-02", [nightShift]);
+
+    expect(calculateAttendance(data, person, "2026-04-01").workMinutes).toBe(480);
+    expect(calculateAttendance(data, person, "2026-04-02").punches).toHaveLength(0);
+    expect(calculateAttendance(data, person, "2026-04-02").status).toBe("absent");
+  });
+
+  it("keeps consecutive night shifts separated by start date", () => {
+    const person = employee({ shiftId: nightShift.id });
+    const punches = [
+      punch("in", "22:00", "2026-04-01"),
+      punch("out", "07:00", "2026-04-02"),
+      punch("in", "22:00", "2026-04-02"),
+      punch("out", "07:00", "2026-04-03"),
+    ];
+    const data = appData(person, punches, [], "2026-04-02", [nightShift]);
+
+    expect(calculateAttendance(data, person, "2026-04-01").punches.map((item) => item.date)).toEqual([
+      "2026-04-01",
+      "2026-04-02",
+    ]);
+    expect(calculateAttendance(data, person, "2026-04-02").punches.map((item) => item.date)).toEqual([
+      "2026-04-02",
+      "2026-04-03",
+    ]);
+    expect(payrollFor(data, person, "2026-04").workHours).toBe(16);
+  });
+
+  it("keeps a month-end night shift in the starting month readiness", () => {
+    const person = employee({ shiftId: nightShift.id });
+    const punches = [
+      punch("in", "22:00", "2026-04-30"),
+      punch("out", "07:00", "2026-05-01"),
+    ];
+    const data = appData(person, punches, [], "2026-04-30", [nightShift]);
+
+    expect(payrollFor(data, person, "2026-04").workHours).toBe(8);
+    expect(getMonthlyReadiness(data, "2026-04").monthPunchCount).toBe(2);
+    expect(getMonthlyReadiness(data, "2026-05").hasOperationalData).toBe(false);
   });
 });
 

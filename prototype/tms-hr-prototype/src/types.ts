@@ -194,6 +194,11 @@ export interface AttendanceRecord {
   breakOut: string;
   breakIn: string;
   clockOut: string;
+  clockInDayOffset: number;
+  breakOutDayOffset: number;
+  breakInDayOffset: number;
+  clockOutDayOffset: number;
+  overnight: boolean;
   workMinutes: number;
   lateMinutes: number;
   earlyMinutes: number;

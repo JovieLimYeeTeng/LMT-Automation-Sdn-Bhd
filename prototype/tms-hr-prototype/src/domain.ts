@@ -193,6 +193,17 @@ export function dateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export function addDays(date: string, days: number): string {
+  const cursor = parseDate(date);
+  cursor.setDate(cursor.getDate() + days);
+  return dateKey(cursor);
+}
+
+export function dateDiffDays(from: string, to: string): number {
+  const dayMs = 86400000;
+  return Math.round((parseDate(to).getTime() - parseDate(from).getTime()) / dayMs);
+}
+
 export function monthDates(month: string): string[] {
   const [year, monthIndex] = month.split("-").map(Number);
   const cursor = new Date(year, monthIndex - 1, 1);
@@ -212,6 +223,58 @@ export function minutesFromTime(time: string): number {
   if (!time) return 0;
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
+}
+
+export function isOvernightSchedule(schedule: DaySchedule | undefined): boolean {
+  if (!schedule) return false;
+  return minutesFromTime(schedule.end) <= minutesFromTime(schedule.start);
+}
+
+function scheduleTimeMinutes(schedule: DaySchedule, time: string): number {
+  const minutes = minutesFromTime(time);
+  return isOvernightSchedule(schedule) && minutes < minutesFromTime(schedule.start) ? minutes + 1440 : minutes;
+}
+
+function punchAbsoluteMinutes(punch: Pick<Punch, "date" | "time">, baseDate: string): number {
+  return dateDiffDays(baseDate, punch.date) * 1440 + minutesFromTime(punch.time);
+}
+
+export function punchDateForAttendanceTime(
+  date: string,
+  schedule: DaySchedule | undefined,
+  kind: PunchKind,
+  time: string,
+): string {
+  if (!schedule || !isOvernightSchedule(schedule) || !time || kind === "in") return date;
+  return minutesFromTime(time) < minutesFromTime(schedule.start) ? addDays(date, 1) : date;
+}
+
+function attendanceWindowPunches(
+  punches: Punch[],
+  employeeId: string,
+  date: string,
+  schedule: DaySchedule | undefined,
+): Punch[] {
+  if (!schedule || !isOvernightSchedule(schedule)) {
+    return sortByDateTime(punches.filter((item) => item.employeeId === employeeId && item.date === date));
+  }
+
+  const nextDate = addDays(date, 1);
+  const startMinutes = scheduleTimeMinutes(schedule, schedule.start);
+  const endMinutes = scheduleTimeMinutes(schedule, schedule.end);
+  const otStartMinutes = scheduleTimeMinutes(schedule, schedule.otStart || schedule.end);
+  let otEndMinutes = scheduleTimeMinutes(schedule, schedule.otEnd || schedule.end);
+  if (otEndMinutes <= otStartMinutes) otEndMinutes += 1440;
+  const windowStart = startMinutes - 240;
+  const windowEnd = Math.max(endMinutes, otStartMinutes, Math.min(otEndMinutes, endMinutes + 720));
+
+  return punches
+    .filter((item) => item.employeeId === employeeId && (item.date === date || item.date === nextDate))
+    .filter((item) => {
+      const absolute = punchAbsoluteMinutes(item, date);
+      return absolute >= windowStart && absolute <= windowEnd;
+    })
+    .sort((a, b) => punchAbsoluteMinutes(a, date) - punchAbsoluteMinutes(b, date));
 }
 
 export function timeFromMinutes(totalMinutes: number): string {
@@ -304,17 +367,18 @@ function calculateHolidayWork(
   punches: Punch[],
   shift: Shift | undefined,
   schedule: DaySchedule | undefined,
+  date: string,
 ): Pick<AttendanceRecord, "workMinutes" | "overtimeMinutes"> {
-  const byKind = (kind: PunchKind) => punches.find((item) => item.kind === kind)?.time ?? "";
-  const clockIn = byKind("in") || punches[0]?.time || "";
-  const clockOut = byKind("out") || punches[punches.length - 1]?.time || "";
-  const breakOut = byKind("breakOut");
-  const breakIn = byKind("breakIn");
-  if (!clockIn || !clockOut) return { workMinutes: 0, overtimeMinutes: 0 };
+  const byKind = (kind: PunchKind) => punches.find((item) => item.kind === kind);
+  const clockInPunch = byKind("in") || punches[0];
+  const clockOutPunch = byKind("out") || punches[punches.length - 1];
+  const breakOutPunch = byKind("breakOut");
+  const breakInPunch = byKind("breakIn");
+  if (!clockInPunch || !clockOutPunch) return { workMinutes: 0, overtimeMinutes: 0 };
 
-  const inMinutes = minutesFromTime(clockIn);
-  const outMinutes = minutesFromTime(clockOut);
-  const { lunchMinutes } = resolveLunch(employee, shift, schedule, breakOut, breakIn);
+  const inMinutes = punchAbsoluteMinutes(clockInPunch, date);
+  const outMinutes = punchAbsoluteMinutes(clockOutPunch, date);
+  const { lunchMinutes } = resolveLunch(employee, shift, schedule, breakOutPunch, breakInPunch, date);
   const workMinutes = Math.max(0, outMinutes - inMinutes - lunchMinutes);
   const overtimeMinutes = employee.exemptions.overtime ? 0 : workMinutes;
   return { workMinutes, overtimeMinutes };
@@ -324,17 +388,18 @@ function resolveLunch(
   employee: Employee,
   shift: Shift | undefined,
   schedule: DaySchedule | undefined,
-  breakOut: string,
-  breakIn: string,
+  breakOut: Punch | undefined,
+  breakIn: Punch | undefined,
+  date: string,
 ): { lunchMinutes: number; lunchOverMinutes: number } {
   if (employee.exemptions.lunchPunch) return { lunchMinutes: 0, lunchOverMinutes: 0 };
 
   const fallbackLunchMinutes = schedule
-    ? Math.max(0, minutesFromTime(schedule.lunchEnd) - minutesFromTime(schedule.lunchStart))
+    ? Math.max(0, scheduleTimeMinutes(schedule, schedule.lunchEnd) - scheduleTimeMinutes(schedule, schedule.lunchStart))
     : (shift?.lunchMinutes ?? 0);
   const hasLunchPunches = Boolean(breakOut && breakIn);
   const actualLunchMinutes = hasLunchPunches
-    ? Math.max(0, minutesFromTime(breakIn) - minutesFromTime(breakOut))
+    ? Math.max(0, punchAbsoluteMinutes(breakIn!, date) - punchAbsoluteMinutes(breakOut!, date))
     : fallbackLunchMinutes;
   const lunchOverMinutes =
     hasLunchPunches && shift?.flexibleLunch ? Math.max(0, actualLunchMinutes - shift.lunchMinutes) : 0;
@@ -353,16 +418,19 @@ export function calculateAttendance(
   const schedule = shift?.days[weekday];
   const holiday = data.holidays.find((item) => item.date === date);
   const leave = data.leaves.find((item) => item.employeeId === employee.id && item.date === date);
-  const punches = sortByDateTime(
-    data.punches.filter((item) => item.employeeId === employee.id && item.date === date),
-  );
-  const byKind = (kind: PunchKind) => punches.find((item) => item.kind === kind)?.time ?? "";
-  const clockIn = byKind("in") || punches[0]?.time || "";
-  const clockOut = byKind("out") || punches[punches.length - 1]?.time || "";
-  const breakOut = byKind("breakOut");
-  const breakIn = byKind("breakIn");
+  const punches = attendanceWindowPunches(data.punches, employee.id, date, schedule);
+  const byKind = (kind: PunchKind) => punches.find((item) => item.kind === kind);
+  const clockInPunch = byKind("in") || punches[0];
+  const clockOutPunch = byKind("out") || punches[punches.length - 1];
+  const breakOutPunch = byKind("breakOut");
+  const breakInPunch = byKind("breakIn");
+  const clockIn = clockInPunch?.time ?? "";
+  const clockOut = clockOutPunch?.time ?? "";
+  const breakOut = breakOutPunch?.time ?? "";
+  const breakIn = breakInPunch?.time ?? "";
   const futureDate = date > data.settings.businessDate;
   const isRestDay = effectiveRestDay(employee, date, schedule?.off ?? false);
+  const overnight = isOvernightSchedule(schedule);
 
   const base: AttendanceRecord = {
     date,
@@ -378,6 +446,11 @@ export function calculateAttendance(
     breakOut,
     breakIn,
     clockOut,
+    clockInDayOffset: clockInPunch ? Math.max(0, dateDiffDays(date, clockInPunch.date)) : 0,
+    breakOutDayOffset: breakOutPunch ? Math.max(0, dateDiffDays(date, breakOutPunch.date)) : 0,
+    breakInDayOffset: breakInPunch ? Math.max(0, dateDiffDays(date, breakInPunch.date)) : 0,
+    clockOutDayOffset: clockOutPunch ? Math.max(0, dateDiffDays(date, clockOutPunch.date)) : 0,
+    overnight,
     workMinutes: 0,
     lateMinutes: 0,
     earlyMinutes: 0,
@@ -401,7 +474,7 @@ export function calculateAttendance(
 
   if (holiday) {
     if (punches.length > 0) {
-      const extra = calculateHolidayWork(employee, punches, shift, schedule);
+      const extra = calculateHolidayWork(employee, punches, shift, schedule, date);
       return {
         ...base,
         ...extra,
@@ -414,7 +487,7 @@ export function calculateAttendance(
 
   if (isRestDay) {
     if (punches.length > 0) {
-      const extra = calculateHolidayWork(employee, punches, shift, schedule);
+      const extra = calculateHolidayWork(employee, punches, shift, schedule, date);
       return { ...base, ...extra, status: "rest", flags: [{ kind: "restDayWork" }] };
     }
     return { ...base, status: "rest", flags: [{ kind: "restDay" }] };
@@ -436,13 +509,14 @@ export function calculateAttendance(
     return { ...base, status: "incomplete", flags: [{ kind: "missingPunch" }], missing: true };
   }
 
-  const inMinutes = minutesFromTime(clockIn);
-  const outMinutes = minutesFromTime(clockOut);
-  const startMinutes = minutesFromTime(schedule.start);
-  const endMinutes = minutesFromTime(schedule.end);
-  const otStartMinutes = minutesFromTime(schedule.otStart || schedule.end);
-  const otEndMinutes = minutesFromTime(schedule.otEnd || "23:59");
-  const { lunchMinutes, lunchOverMinutes } = resolveLunch(employee, shift, schedule, breakOut, breakIn);
+  const inMinutes = punchAbsoluteMinutes(clockInPunch!, date);
+  const outMinutes = punchAbsoluteMinutes(clockOutPunch!, date);
+  const startMinutes = scheduleTimeMinutes(schedule, schedule.start);
+  const endMinutes = scheduleTimeMinutes(schedule, schedule.end);
+  const otStartMinutes = scheduleTimeMinutes(schedule, schedule.otStart || schedule.end);
+  let otEndMinutes = scheduleTimeMinutes(schedule, schedule.otEnd || "23:59");
+  if (otEndMinutes <= otStartMinutes) otEndMinutes += 1440;
+  const { lunchMinutes, lunchOverMinutes } = resolveLunch(employee, shift, schedule, breakOutPunch, breakInPunch, date);
   const workMinutes = Math.max(0, outMinutes - inMinutes - lunchMinutes);
   const lateMinutes =
     employee.exemptions.late || shift.flexibleWork
@@ -572,7 +646,8 @@ export function payrollFor(data: AppData, employee: Employee, month: string) {
 
 export function getMonthlyReadiness(data: AppData, month: string, employees = data.employees) {
   const records = getRecordsForMonth(data, month, employees.filter((employee) => employee.active));
-  const monthPunchCount = data.punches.filter((punch) => punch.date.startsWith(month)).length;
+  const monthPunchIds = new Set(records.flatMap((record) => record.punches.map((punch) => punch.id)));
+  const monthPunchCount = monthPunchIds.size;
   const monthLeaveCount = data.leaves.filter((leave) => leave.date.startsWith(month)).length;
   const missingCount = records.filter((record) => record.status === "incomplete").length;
   const absentCount = records.filter((record) => record.status === "absent").length;

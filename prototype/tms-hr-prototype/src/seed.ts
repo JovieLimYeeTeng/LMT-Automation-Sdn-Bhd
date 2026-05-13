@@ -1,4 +1,4 @@
-import { createStandardWeek, dateKey, getWeekday, minutesFromTime, monthDates, timeFromMinutes } from "./domain";
+import { addDays, createStandardWeek, dateKey, getWeekday, minutesFromTime, monthDates, timeFromMinutes } from "./domain";
 import type { AppData, Employee, Punch, PunchKind, Shift } from "./types";
 
 const morningShift: Shift = {
@@ -38,6 +38,19 @@ const officeShift: Shift = {
   lunchMinutes: 60,
   graceMinutes: 30,
   days: createStandardWeek("09:00", "12:30", "13:30", "18:00", "18:30", [0, 6]),
+};
+
+const nightShift: Shift = {
+  id: "shift-night",
+  name: "夜班",
+  code: "N",
+  color: "#59606f",
+  flexibleWork: false,
+  workLengthHours: 8,
+  flexibleLunch: true,
+  lunchMinutes: 60,
+  graceMinutes: 15,
+  days: createStandardWeek("22:00", "02:00", "03:00", "07:00", "07:00", [0]),
 };
 
 const employees: Employee[] = [
@@ -166,6 +179,31 @@ const employees: Employee[] = [
     salary: { type: "hourly", currency: "MYR", monthlyAmount: 0, hourlyRate: 12, otMultiplier: 1.5, leaveDeductPerDay: 0 },
     active: false,
   },
+  {
+    id: "emp-006",
+    enrollNo: "1006",
+    workNo: "EMP-006",
+    firstName: "Nadia",
+    lastName: "Night",
+    gender: "female",
+    idNo: "970808-10-6606",
+    birthDate: "1997-08-08",
+    birthPlace: "Klang",
+    address: "Bandar Bukit Tinggi, Klang",
+    nationality: "Malaysia",
+    company: "Branch Two Sdn Bhd",
+    department: "仓库",
+    position: "夜班操作员",
+    joinDate: "2024-06-01",
+    shiftId: "shift-night",
+    autoShift: false,
+    restDays: [0],
+    shiftOverrides: {},
+    restOverrides: {},
+    exemptions: { late: false, early: false, lunchPunch: false, overtime: false },
+    salary: { type: "monthly", currency: "MYR", monthlyAmount: 3200, hourlyRate: 16, otMultiplier: 1.5, leaveDeductPerDay: 120 },
+    active: true,
+  },
 ];
 
 function makePunch(employeeId: string, date: string, kind: PunchKind, time: string, note = ""): Punch {
@@ -191,8 +229,20 @@ function seedDay(employee: Employee, date: string, start: string, end: string, v
   ];
 }
 
+function seedNightDay(employee: Employee, date: string, variance: number): Punch[] {
+  const nextDate = addDays(date, 1);
+  const inTime = timeFromMinutes(minutesFromTime("22:00") + Math.min(variance, 12));
+  const outTime = timeFromMinutes(minutesFromTime("07:00") + Math.max(0, 8 - variance));
+  return [
+    makePunch(employee.id, date, "in", inTime, "夜班样例"),
+    makePunch(employee.id, nextDate, "breakOut", "02:00", "夜班午休"),
+    makePunch(employee.id, nextDate, "breakIn", "03:00", "夜班午休"),
+    makePunch(employee.id, nextDate, "out", outTime, "夜班跨天"),
+  ];
+}
+
 function buildSeedPunches(): Punch[] {
-  const shifts = [morningShift, afternoonShift, officeShift];
+  const shifts = [morningShift, afternoonShift, officeShift, nightShift];
   const punches: Punch[] = [];
   const activeEmployees = employees.filter((employee) => employee.active);
   const dates = monthDates("2026-04").filter((date) => date <= "2026-04-24");
@@ -215,7 +265,11 @@ function buildSeedPunches(): Punch[] {
       }
 
       const variance = (employeeIndex * 4 + dateIndex * 3) % 18;
-      punches.push(...seedDay(employee, date, schedule.start, schedule.end, variance));
+      punches.push(
+        ...(employee.shiftId === "shift-night"
+          ? seedNightDay(employee, date, variance)
+          : seedDay(employee, date, schedule.start, schedule.end, variance)),
+      );
     });
   });
 
@@ -235,7 +289,7 @@ function buildSeedPunches(): Punch[] {
 export function createSeedData(): AppData {
   return {
     employees,
-    shifts: [morningShift, afternoonShift, officeShift],
+    shifts: [morningShift, afternoonShift, officeShift, nightShift],
     holidays: [
       { id: "holiday-001", date: "2026-04-10", name: "Public Holiday" },
       { id: "holiday-002", date: "2026-05-01", name: "Labour Day" },
