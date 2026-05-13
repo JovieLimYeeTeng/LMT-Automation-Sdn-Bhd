@@ -59,6 +59,9 @@ export interface Employee {
   autoShift: boolean;
   flexibleWork: boolean;
   workLengthHours: number;
+  flexibleLunch: boolean;
+  lunchMinutes: number;
+  graceMinutes: number;
   restDays: Weekday[];
   shiftOverrides: Record<string, string>;
   restOverrides: Record<string, boolean>;

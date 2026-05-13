@@ -18,7 +18,7 @@ const shift: Shift = {
 const flexibleShift: Shift = {
   ...shift,
   id: "shift-flex",
-  name: "Office 9-6",
+  name: "Flexible base",
   flexibleWork: false,
 };
 
@@ -58,6 +58,9 @@ function employee(overrides: Partial<Employee> = {}): Employee {
     autoShift: false,
     flexibleWork: false,
     workLengthHours: 8,
+    flexibleLunch: true,
+    lunchMinutes: 60,
+    graceMinutes: 0,
     restDays: [0, 6],
     shiftOverrides: {},
     restOverrides: {},
@@ -209,7 +212,7 @@ describe("attendance rule validation", () => {
   });
 
   it("keeps A+L+G legal with grace and flexible lunch", () => {
-    const person = employee({ autoShift: true, shiftId: graceShift.id });
+    const person = employee({ autoShift: true, shiftId: graceShift.id, graceMinutes: 10, flexibleLunch: true });
     const punches = [
       punch("in", "09:05"),
       punch("breakOut", "12:00"),

@@ -414,13 +414,13 @@ function resolveLunch(
 
   const fallbackLunchMinutes = schedule
     ? Math.max(0, scheduleTimeMinutes(schedule, schedule.lunchEnd) - scheduleTimeMinutes(schedule, schedule.lunchStart))
-    : (shift?.lunchMinutes ?? 0);
+    : (employee.lunchMinutes ?? 0);
   const hasLunchPunches = Boolean(breakOut && breakIn);
   const actualLunchMinutes = hasLunchPunches
     ? Math.max(0, punchAbsoluteMinutes(breakIn!, date) - punchAbsoluteMinutes(breakOut!, date))
     : fallbackLunchMinutes;
   const lunchOverMinutes =
-    hasLunchPunches && shift?.flexibleLunch ? Math.max(0, actualLunchMinutes - shift.lunchMinutes) : 0;
+    hasLunchPunches && employee.flexibleLunch ? Math.max(0, actualLunchMinutes - employee.lunchMinutes) : 0;
 
   return { lunchMinutes: actualLunchMinutes, lunchOverMinutes };
 }
@@ -541,7 +541,7 @@ export function calculateAttendance(
   const lateMinutes =
     employee.exemptions.late || flexibleWork
       ? 0
-      : Math.max(0, inMinutes - startMinutes - shift.graceMinutes);
+      : Math.max(0, inMinutes - startMinutes - employee.graceMinutes);
   const earlyMinutes =
     employee.exemptions.early || flexibleWork ? 0 : Math.max(0, endMinutes - outMinutes);
   const overtimeMinutes = employee.exemptions.overtime

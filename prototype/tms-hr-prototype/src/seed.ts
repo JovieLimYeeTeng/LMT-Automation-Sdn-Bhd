@@ -8,9 +8,9 @@ const morningShift: Shift = {
   color: "#2f7d74",
   flexibleWork: false,
   workLengthHours: 8,
-  flexibleLunch: true,
+  flexibleLunch: false,
   lunchMinutes: 60,
-  graceMinutes: 15,
+  graceMinutes: 0,
   days: createStandardWeek("09:00", "13:00", "14:00", "18:00", "18:30", [0]),
 };
 
@@ -21,23 +21,10 @@ const afternoonShift: Shift = {
   color: "#b56727",
   flexibleWork: false,
   workLengthHours: 8,
-  flexibleLunch: true,
+  flexibleLunch: false,
   lunchMinutes: 60,
-  graceMinutes: 10,
+  graceMinutes: 0,
   days: createStandardWeek("13:00", "17:00", "18:00", "22:00", "22:30", [0]),
-};
-
-const officeShift: Shift = {
-  id: "shift-office",
-  name: "Office 9-6",
-  code: "O",
-  color: "#405d9a",
-  flexibleWork: false,
-  workLengthHours: 8,
-  flexibleLunch: true,
-  lunchMinutes: 60,
-  graceMinutes: 15,
-  days: createStandardWeek("09:00", "13:00", "14:00", "18:00", "18:30", [0, 6]),
 };
 
 const nightShift: Shift = {
@@ -47,9 +34,9 @@ const nightShift: Shift = {
   color: "#59606f",
   flexibleWork: false,
   workLengthHours: 8,
-  flexibleLunch: true,
+  flexibleLunch: false,
   lunchMinutes: 60,
-  graceMinutes: 15,
+  graceMinutes: 0,
   days: createStandardWeek("18:00", "22:00", "23:00", "02:00", "02:00", [0]),
 };
 
@@ -74,6 +61,9 @@ const employees: Employee[] = [
     autoShift: false,
     flexibleWork: false,
     workLengthHours: 8,
+    flexibleLunch: true,
+    lunchMinutes: 60,
+    graceMinutes: 15,
     restDays: [0],
     shiftOverrides: { "2026-04-15": "shift-afternoon" },
     restOverrides: {},
@@ -101,6 +91,9 @@ const employees: Employee[] = [
     autoShift: true,
     flexibleWork: false,
     workLengthHours: 8,
+    flexibleLunch: true,
+    lunchMinutes: 60,
+    graceMinutes: 10,
     restDays: [2],
     shiftOverrides: {},
     restOverrides: {},
@@ -124,10 +117,13 @@ const employees: Employee[] = [
     department: "办公室",
     position: "HR Admin",
     joinDate: "2021-11-10",
-    shiftId: "shift-office",
+    shiftId: "shift-morning",
     autoShift: false,
     flexibleWork: true,
     workLengthHours: 8,
+    flexibleLunch: true,
+    lunchMinutes: 60,
+    graceMinutes: 15,
     restDays: [0, 6],
     shiftOverrides: {},
     restOverrides: { "2026-04-18": false },
@@ -155,6 +151,9 @@ const employees: Employee[] = [
     autoShift: false,
     flexibleWork: false,
     workLengthHours: 8,
+    flexibleLunch: true,
+    lunchMinutes: 60,
+    graceMinutes: 15,
     restDays: [5],
     shiftOverrides: {},
     restOverrides: {},
@@ -182,6 +181,9 @@ const employees: Employee[] = [
     autoShift: false,
     flexibleWork: false,
     workLengthHours: 8,
+    flexibleLunch: true,
+    lunchMinutes: 60,
+    graceMinutes: 10,
     restDays: [1, 3],
     shiftOverrides: {},
     restOverrides: {},
@@ -209,6 +211,9 @@ const employees: Employee[] = [
     autoShift: false,
     flexibleWork: false,
     workLengthHours: 8,
+    flexibleLunch: true,
+    lunchMinutes: 60,
+    graceMinutes: 15,
     restDays: [0],
     shiftOverrides: {},
     restOverrides: {},
@@ -254,7 +259,7 @@ function seedNightDay(employee: Employee, date: string, variance: number): Punch
 }
 
 function buildSeedPunches(): Punch[] {
-  const shifts = [morningShift, afternoonShift, officeShift, nightShift];
+  const shifts = [morningShift, afternoonShift, nightShift];
   const punches: Punch[] = [];
   const activeEmployees = employees.filter((employee) => employee.active);
   const dates = monthDates("2026-04").filter((date) => date <= "2026-04-24");
@@ -301,7 +306,7 @@ function buildSeedPunches(): Punch[] {
 export function createSeedData(): AppData {
   return {
     employees,
-    shifts: [morningShift, afternoonShift, officeShift, nightShift],
+    shifts: [morningShift, afternoonShift, nightShift],
     holidays: [
       { id: "holiday-001", date: "2026-04-10", name: "Public Holiday" },
       { id: "holiday-002", date: "2026-05-01", name: "Labour Day" },

@@ -97,6 +97,8 @@ const FOCUS_EMPLOYEE_KEY = "tms-hr-focus-employee-v1";
 
 type ViewId = "thisMonth" | "employees" | "reports" | "settings";
 type MonthStage = "home" | "import" | "timecards" | "leave" | "payroll";
+type ConditionWorkMode = "fixed" | "auto" | "flexible";
+type EmployeeStatusFilter = "all" | "active" | "inactive";
 
 const VIEW_IDS: ReadonlyArray<ViewId> = [
   "thisMonth",
@@ -110,6 +112,21 @@ const MONTH_STAGES: ReadonlyArray<MonthStage> = ["home", "import", "timecards", 
 type SettingsTab = "shifts" | "holidays" | "permissions" | "devices" | "lists" | "data";
 const SETTINGS_TABS: ReadonlyArray<SettingsTab> = ["shifts", "holidays", "permissions", "devices", "lists", "data"];
 const emptyPunchTimes: Record<PunchKind, string> = { in: "", breakOut: "", breakIn: "", out: "" };
+const LEGACY_SHIFT_ID_REPLACEMENTS: Record<string, string> = {
+  "shift-office": "shift-morning",
+};
+const defaultExemptions: Employee["exemptions"] = { late: false, early: false, lunchPunch: false, overtime: false };
+const defaultEmployeeFilters = {
+  status: "all" as EmployeeStatusFilter,
+  company: "all",
+  department: "all",
+  position: "all",
+  shiftId: "all",
+  enrollFrom: "",
+  enrollTo: "",
+  birthFrom: "",
+  birthTo: "",
+};
 
 const defaultDeviceSettings = {
   fingerprint: true,
@@ -147,17 +164,50 @@ function buildCorrectionReasonList(raw: AppData, seed: AppData): string[] {
   ]);
 }
 
+function migrateShiftId(shiftId: string): string {
+  return LEGACY_SHIFT_ID_REPLACEMENTS[shiftId] ?? shiftId;
+}
+
+function migrateShiftOverrides(overrides: Record<string, string> | undefined): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(overrides ?? {}).map(([date, shiftId]) => [date, migrateShiftId(shiftId)]),
+  );
+}
+
+function normalizeEmployeeConditions(employee: Employee): Employee {
+  return {
+    ...employee,
+    autoShift: employee.flexibleWork ? false : employee.autoShift,
+    workLengthHours: Math.max(1, employee.workLengthHours || 8),
+    lunchMinutes: Math.max(0, employee.lunchMinutes || 0),
+    graceMinutes: Math.max(0, employee.graceMinutes || 0),
+  };
+}
+
+function compareEmployeeNo(value: string, boundary: string): number {
+  const valueNumber = Number(value);
+  const boundaryNumber = Number(boundary);
+  if (Number.isFinite(valueNumber) && Number.isFinite(boundaryNumber)) {
+    return valueNumber - boundaryNumber;
+  }
+  return value.localeCompare(boundary, undefined, { numeric: true, sensitivity: "base" });
+}
+
 function hydrateEmployee(raw: Employee, legacyShift?: Shift): Employee {
   const legacyFlexibleWork = Boolean(legacyShift?.flexibleWork);
-  return {
+  return normalizeEmployeeConditions({
     ...raw,
     nationality: normalizeDataValue(raw.nationality),
     department: normalizeDataValue(raw.department),
     position: normalizeDataValue(raw.position),
+    shiftId: migrateShiftId(raw.shiftId),
     autoShift: raw.autoShift ?? false,
     flexibleWork: raw.flexibleWork ?? legacyFlexibleWork,
     workLengthHours: raw.workLengthHours ?? legacyShift?.workLengthHours ?? 8,
-    shiftOverrides: raw.shiftOverrides ?? {},
+    flexibleLunch: raw.flexibleLunch ?? legacyShift?.flexibleLunch ?? false,
+    lunchMinutes: raw.lunchMinutes ?? legacyShift?.lunchMinutes ?? 60,
+    graceMinutes: raw.graceMinutes ?? legacyShift?.graceMinutes ?? 0,
+    shiftOverrides: migrateShiftOverrides(raw.shiftOverrides),
     restOverrides: raw.restOverrides ?? {},
     salary: raw.salary ?? {
       type: "monthly",
@@ -167,7 +217,7 @@ function hydrateEmployee(raw: Employee, legacyShift?: Shift): Employee {
       otMultiplier: 1.5,
       leaveDeductPerDay: 0,
     },
-  };
+  });
 }
 
 function hydrateShift(raw: Shift): Shift {
@@ -187,7 +237,8 @@ function isLegacySeedShift(raw: Shift): boolean {
   return false;
 }
 
-function migrateSeedShift(raw: Shift, seedShift: Shift | undefined): Shift {
+function migrateSeedShift(raw: Shift, seedShift: Shift | undefined): Shift | undefined {
+  if (raw.id === "shift-office") return undefined;
   return seedShift && isLegacySeedShift(raw) ? seedShift : raw;
 }
 
@@ -214,10 +265,14 @@ function hydrateData(raw: AppData): AppData {
   const positions = buildPositionList(raw, seed);
   const nationalities = buildNationalityList(raw, seed);
   const correctionReasons = buildCorrectionReasonList(raw, seed);
-  const rawShiftIds = new Set(raw.shifts.map((shift) => shift.id));
   const rawEmployeeIds = new Set(raw.employees.map((employee) => employee.id));
   const rawShiftById = new Map(raw.shifts.map((shift) => [shift.id, shift]));
   const seedShiftById = new Map(seed.shifts.map((shift) => [shift.id, shift]));
+  const migratedRawShifts = raw.shifts.flatMap((shift) => {
+    const migrated = migrateSeedShift(shift, seedShiftById.get(shift.id));
+    return migrated ? [migrated] : [];
+  });
+  const migratedRawShiftIds = new Set(migratedRawShifts.map((shift) => shift.id));
   return {
     ...raw,
     employees: [
@@ -225,8 +280,8 @@ function hydrateData(raw: AppData): AppData {
       ...seed.employees.filter((employee) => !rawEmployeeIds.has(employee.id)).map((employee) => hydrateEmployee(employee, seedShiftById.get(employee.shiftId))),
     ],
     shifts: [
-      ...raw.shifts.map((shift) => hydrateShift(migrateSeedShift(shift, seedShiftById.get(shift.id)))),
-      ...seed.shifts.filter((shift) => !rawShiftIds.has(shift.id)).map(hydrateShift),
+      ...migratedRawShifts.map(hydrateShift),
+      ...seed.shifts.filter((shift) => !migratedRawShiftIds.has(shift.id)).map(hydrateShift),
     ],
     leaves: raw.leaves.map(hydrateLeave),
     punches: raw.punches.map(hydratePunch),
@@ -594,6 +649,17 @@ function App() {
   }, [savedToast]);
   const [importPasteText, setImportPasteText] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [employeeFilters, setEmployeeFilters] = useState({ ...defaultEmployeeFilters });
+  const [bulkSelectedEmployeeIds, setBulkSelectedEmployeeIds] = useState<string[]>([]);
+  const [bulkConditionDraft, setBulkConditionDraft] = useState({
+    workMode: "fixed" as ConditionWorkMode,
+    shiftId: data.shifts[0]?.id ?? "",
+    workLengthHours: 8,
+    flexibleLunch: false,
+    lunchMinutes: 60,
+    graceMinutes: 0,
+    exemptions: { ...defaultExemptions },
+  });
   const [timecardSearch, setTimecardSearch] = useState("");
   const [timecardStatusFilter, setTimecardStatusFilter] = useState<TimecardStatusFilter>("all");
   const [timecardPage, setTimecardPage] = useState(1);
@@ -762,6 +828,11 @@ function App() {
     }
   }, [data.employees, data.shifts, selectedEmployeeId, selectedShiftId]);
 
+  useEffect(() => {
+    const employeeIds = new Set(data.employees.map((employee) => employee.id));
+    setBulkSelectedEmployeeIds((current) => current.filter((id) => employeeIds.has(id)));
+  }, [data.employees]);
+
   const monthRecords = useMemo(() => getRecordsForMonth(data, selectedMonth, activeEmployees), [data, selectedMonth, activeEmployees]);
   const monthlyReadiness = useMemo(
     () => getMonthlyReadiness(data, selectedMonth, activeEmployees),
@@ -789,8 +860,73 @@ function App() {
   function patchEmployee(id: string, patch: Partial<Employee>) {
     setData((current) => ({
       ...current,
-      employees: current.employees.map((employee) => (employee.id === id ? { ...employee, ...patch } : employee)),
+      employees: current.employees.map((employee) => (employee.id === id ? normalizeEmployeeConditions({ ...employee, ...patch }) : employee)),
     }));
+  }
+
+  function employeeConditionSummary(employee: Employee): string[] {
+    const summary = [
+      employee.flexibleWork
+        ? t("conditionFlexibleWorkShort", { hours: employee.workLengthHours })
+        : employee.autoShift
+          ? t("conditionAutoShiftShort")
+          : t("conditionFixedShiftShort"),
+    ];
+    if (employee.flexibleLunch) summary.push(t("conditionFlexibleLunchShort", { mins: employee.lunchMinutes }));
+    if (employee.graceMinutes > 0) summary.push(t("conditionGraceShort", { mins: employee.graceMinutes }));
+    const waiverCount = Object.values(employee.exemptions).filter(Boolean).length;
+    if (waiverCount > 0) summary.push(t("conditionWaiverShort", { count: waiverCount }));
+    return summary;
+  }
+
+  function buildConditionPatchFromDraft(): Partial<Employee> {
+    const flexibleWork = bulkConditionDraft.workMode === "flexible";
+    return {
+      shiftId: bulkConditionDraft.shiftId || (data.shifts[0]?.id ?? ""),
+      autoShift: bulkConditionDraft.workMode === "auto" && !flexibleWork,
+      flexibleWork,
+      workLengthHours: bulkConditionDraft.workLengthHours,
+      flexibleLunch: bulkConditionDraft.flexibleLunch,
+      lunchMinutes: bulkConditionDraft.lunchMinutes,
+      graceMinutes: bulkConditionDraft.graceMinutes,
+      exemptions: { ...bulkConditionDraft.exemptions },
+    };
+  }
+
+  function applyBulkConditions() {
+    const targetIds = new Set(bulkSelectedEmployeeIds);
+    if (targetIds.size === 0) return;
+    const conditionPatch = buildConditionPatchFromDraft();
+    setData((current) => ({
+      ...current,
+      employees: current.employees.map((employee) =>
+        targetIds.has(employee.id) ? normalizeEmployeeConditions({ ...employee, ...conditionPatch }) : employee,
+      ),
+    }));
+    showSavedToast(t("bulkConditionsApplied", { count: targetIds.size }));
+  }
+
+  function toggleBulkEmployeeSelection(employeeId: string, checked: boolean) {
+    setBulkSelectedEmployeeIds((current) => {
+      if (checked) return current.includes(employeeId) ? current : [...current, employeeId];
+      return current.filter((id) => id !== employeeId);
+    });
+  }
+
+  function setBulkSelectionFor(ids: string[], selected: boolean) {
+    setBulkSelectedEmployeeIds((current) => {
+      const next = new Set(current);
+      ids.forEach((id) => {
+        if (selected) next.add(id);
+        else next.delete(id);
+      });
+      return Array.from(next);
+    });
+  }
+
+  function clearEmployeeFilters() {
+    setEmployeeSearch("");
+    setEmployeeFilters({ ...defaultEmployeeFilters });
   }
 
   function patchShift(id: string, patch: Partial<Shift>) {
@@ -886,10 +1022,13 @@ function App() {
       autoShift: false,
       flexibleWork: false,
       workLengthHours: 8,
+      flexibleLunch: false,
+      lunchMinutes: 60,
+      graceMinutes: 0,
       restDays: [0],
       shiftOverrides: {},
       restOverrides: {},
-      exemptions: { late: false, early: false, lunchPunch: false, overtime: false },
+      exemptions: { ...defaultExemptions },
       salary: { type: "monthly", currency: "MYR", monthlyAmount: 0, hourlyRate: 0, otMultiplier: 1.5, leaveDeductPerDay: 0 },
       active: true,
     };
@@ -1990,10 +2129,11 @@ function App() {
   function renderEmployeeList() {
     const search = employeeSearch.trim().toLowerCase();
     const visibleEmployees = data.employees.filter((employee) => {
-      if (!search) return true;
-      return [
+      const matchesSearch = !search || [
         employee.enrollNo,
         employee.workNo,
+        employee.idNo,
+        employee.birthDate,
         displayEmployeeName(employee),
         employee.department,
         employee.company,
@@ -2002,7 +2142,22 @@ function App() {
         .join(" ")
         .toLowerCase()
         .includes(search);
+      if (!matchesSearch) return false;
+      if (employeeFilters.status === "active" && !employee.active) return false;
+      if (employeeFilters.status === "inactive" && employee.active) return false;
+      if (employeeFilters.company !== "all" && employee.company !== employeeFilters.company) return false;
+      if (employeeFilters.department !== "all" && employee.department !== employeeFilters.department) return false;
+      if (employeeFilters.position !== "all" && employee.position !== employeeFilters.position) return false;
+      if (employeeFilters.shiftId !== "all" && employee.shiftId !== employeeFilters.shiftId) return false;
+      if (employeeFilters.enrollFrom && compareEmployeeNo(employee.enrollNo, employeeFilters.enrollFrom) < 0) return false;
+      if (employeeFilters.enrollTo && compareEmployeeNo(employee.enrollNo, employeeFilters.enrollTo) > 0) return false;
+      if (employeeFilters.birthFrom && (!employee.birthDate || employee.birthDate < employeeFilters.birthFrom)) return false;
+      if (employeeFilters.birthTo && (!employee.birthDate || employee.birthDate > employeeFilters.birthTo)) return false;
+      return true;
     });
+    const visibleEmployeeIds = visibleEmployees.map((employee) => employee.id);
+    const selectedVisibleCount = visibleEmployeeIds.filter((id) => bulkSelectedEmployeeIds.includes(id)).length;
+    const allVisibleSelected = visibleEmployeeIds.length > 0 && selectedVisibleCount === visibleEmployeeIds.length;
     return (
       <div className="view-stack">
         <section className="panel">
@@ -2010,13 +2165,174 @@ function App() {
             title={t("sectionEmployeeList")}
             action={<Button icon={Plus} onClick={openAddEmployee}>{t("newEmployee")}</Button>}
           />
-          <div className="list-search">
-            <ListFilter size={16} aria-hidden="true" />
-            <input
-              value={employeeSearch}
-              onChange={(event) => setEmployeeSearch(event.target.value)}
-              placeholder={t("searchEmployee")}
-            />
+          <div className="employee-filter-panel" aria-label={t("employeeFilterTitle")}>
+            <div className="employee-filter-head">
+              <div>
+                <strong>{t("employeeFilterTitle")}</strong>
+                <span>{t("employeeFilterResult", { count: visibleEmployees.length })}</span>
+              </div>
+              <Button icon={RefreshCcw} variant="ghost" onClick={clearEmployeeFilters}>{t("clearFilters")}</Button>
+            </div>
+            <div className="employee-filter-grid">
+              <Field label={t("employeeFilterSearch")} compact>
+                <div className="list-search">
+                  <ListFilter size={16} aria-hidden="true" />
+                  <input
+                    value={employeeSearch}
+                    onChange={(event) => setEmployeeSearch(event.target.value)}
+                    placeholder={t("searchEmployee")}
+                  />
+                </div>
+              </Field>
+              <Field label={t("statusLabel")} compact>
+                <select value={employeeFilters.status} onChange={(event) => setEmployeeFilters((current) => ({ ...current, status: event.target.value as EmployeeStatusFilter }))}>
+                  <option value="all">{t("all")}</option>
+                  <option value="active">{t("active")}</option>
+                  <option value="inactive">{t("inactive")}</option>
+                </select>
+              </Field>
+              <Field label={t("companyLabel")} compact>
+                <select value={employeeFilters.company} onChange={(event) => setEmployeeFilters((current) => ({ ...current, company: event.target.value }))}>
+                  <option value="all">{t("all")}</option>
+                  {data.settings.companies.map((company) => <option key={company} value={company}>{translateDataValue(company, lang)}</option>)}
+                </select>
+              </Field>
+              <Field label={t("departmentLabel")} compact>
+                <select value={employeeFilters.department} onChange={(event) => setEmployeeFilters((current) => ({ ...current, department: event.target.value }))}>
+                  <option value="all">{t("all")}</option>
+                  {data.settings.departments.map((department) => <option key={department} value={department}>{translateDataValue(department, lang)}</option>)}
+                </select>
+              </Field>
+              <Field label={t("positionLabel")} compact>
+                <select value={employeeFilters.position} onChange={(event) => setEmployeeFilters((current) => ({ ...current, position: event.target.value }))}>
+                  <option value="all">{t("all")}</option>
+                  {data.settings.positions.map((position) => <option key={position} value={position}>{translateDataValue(position, lang)}</option>)}
+                </select>
+              </Field>
+              <Field label={t("shiftLabel")} compact>
+                <select value={employeeFilters.shiftId} onChange={(event) => setEmployeeFilters((current) => ({ ...current, shiftId: event.target.value }))}>
+                  <option value="all">{t("all")}</option>
+                  {data.shifts.map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
+                </select>
+              </Field>
+              <Field label={t("employeeNoFromLabel")} compact>
+                <input value={employeeFilters.enrollFrom} onChange={(event) => setEmployeeFilters((current) => ({ ...current, enrollFrom: event.target.value }))} />
+              </Field>
+              <Field label={t("employeeNoToLabel")} compact>
+                <input value={employeeFilters.enrollTo} onChange={(event) => setEmployeeFilters((current) => ({ ...current, enrollTo: event.target.value }))} />
+              </Field>
+              <Field label={t("birthDateFromLabel")} compact>
+                <input type="date" value={employeeFilters.birthFrom} onChange={(event) => setEmployeeFilters((current) => ({ ...current, birthFrom: event.target.value }))} />
+              </Field>
+              <Field label={t("birthDateToLabel")} compact>
+                <input type="date" value={employeeFilters.birthTo} onChange={(event) => setEmployeeFilters((current) => ({ ...current, birthTo: event.target.value }))} />
+              </Field>
+            </div>
+          </div>
+          <div className="bulk-condition-panel" aria-label={t("bulkConditionsTitle")}>
+            <div className="bulk-condition-head">
+              <div>
+                <strong>{t("bulkConditionsTitle")}</strong>
+                <span>{t("bulkSelectedCount", { count: bulkSelectedEmployeeIds.length })}</span>
+              </div>
+              <div className="inline-actions">
+                <Button
+                  icon={CheckCircle2}
+                  variant="secondary"
+                  onClick={() => setBulkSelectionFor(visibleEmployeeIds, !allVisibleSelected)}
+                  disabled={visibleEmployeeIds.length === 0}
+                >
+                  {allVisibleSelected ? t("bulkClearVisible") : t("bulkSelectVisible")}
+                </Button>
+                <Button
+                  icon={Save}
+                  onClick={applyBulkConditions}
+                  disabled={bulkSelectedEmployeeIds.length === 0}
+                >
+                  {t("bulkApplyConditions")}
+                </Button>
+              </div>
+            </div>
+            <div className="bulk-condition-grid">
+              <Field label={t("bulkWorkModeLabel")} compact>
+                <select
+                  value={bulkConditionDraft.workMode}
+                  onChange={(event) => setBulkConditionDraft((current) => ({
+                    ...current,
+                    workMode: event.target.value as ConditionWorkMode,
+                  }))}
+                >
+                  <option value="fixed">{t("workModeFixed")}</option>
+                  <option value="auto">{t("workModeAuto")}</option>
+                  <option value="flexible">{t("workModeFlexible")}</option>
+                </select>
+              </Field>
+              <Field label={t("shiftLabel")} compact>
+                <select
+                  value={bulkConditionDraft.shiftId}
+                  onChange={(event) => setBulkConditionDraft((current) => ({ ...current, shiftId: event.target.value }))}
+                >
+                  {data.shifts.map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
+                </select>
+              </Field>
+              <Field label={t("employeeWorkLengthLabel")} compact>
+                <input
+                  type="number"
+                  min="1"
+                  step="0.5"
+                  value={bulkConditionDraft.workLengthHours}
+                  disabled={bulkConditionDraft.workMode !== "flexible"}
+                  onChange={(event) => setBulkConditionDraft((current) => ({ ...current, workLengthHours: Number(event.target.value) }))}
+                />
+              </Field>
+              <Field label={t("employeeGraceMinutesLabel")} compact>
+                <input
+                  type="number"
+                  min="0"
+                  step="5"
+                  value={bulkConditionDraft.graceMinutes}
+                  onChange={(event) => setBulkConditionDraft((current) => ({ ...current, graceMinutes: Number(event.target.value) }))}
+                />
+              </Field>
+              <label className="toggle-line">
+                <input
+                  type="checkbox"
+                  checked={bulkConditionDraft.flexibleLunch}
+                  onChange={(event) => setBulkConditionDraft((current) => ({ ...current, flexibleLunch: event.target.checked }))}
+                />
+                <span>{t("employeeFlexibleLunchToggle")}</span>
+              </label>
+              <Field label={t("employeeLunchMinutesLabel")} compact>
+                <input
+                  type="number"
+                  min="0"
+                  step="5"
+                  value={bulkConditionDraft.lunchMinutes}
+                  disabled={!bulkConditionDraft.flexibleLunch}
+                  onChange={(event) => setBulkConditionDraft((current) => ({ ...current, lunchMinutes: Number(event.target.value) }))}
+                />
+              </Field>
+            </div>
+            <div className="bulk-waiver-row" role="group" aria-label={t("bulkWaiverLabel")}>
+              {[
+                ["late", t("exemptLate")],
+                ["early", t("exemptEarly")],
+                ["lunchPunch", t("exemptLunchPunch")],
+                ["overtime", t("exemptOvertime")],
+              ].map(([key, label]) => (
+                <label className="check-chip" key={key}>
+                  <input
+                    type="checkbox"
+                    checked={bulkConditionDraft.exemptions[key as keyof Employee["exemptions"]]}
+                    onChange={(event) => setBulkConditionDraft((current) => ({
+                      ...current,
+                      exemptions: { ...current.exemptions, [key]: event.target.checked },
+                    }))}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
           </div>
           {addEmployeeOpen ? (
             <form
@@ -2099,10 +2415,20 @@ function App() {
             <table className="entity-table">
               <thead>
                 <tr>
+                  <th className="select-cell">
+                    <input
+                      type="checkbox"
+                      aria-label={allVisibleSelected ? t("bulkClearVisible") : t("bulkSelectVisible")}
+                      checked={allVisibleSelected}
+                      disabled={visibleEmployeeIds.length === 0}
+                      onChange={(event) => setBulkSelectionFor(visibleEmployeeIds, event.target.checked)}
+                    />
+                  </th>
                   <th>{t("colEmployeeNo")}</th>
                   <th>{t("colName")}</th>
                   <th>{t("colDepartment")}</th>
                   <th>{t("shiftLabel")}</th>
+                  <th>{t("conditionsColumn")}</th>
                   <th>{t("statusLabel")}</th>
                 </tr>
               </thead>
@@ -2118,10 +2444,23 @@ function App() {
                         setEmployeeListMode(false);
                       }}
                     >
+                      <td className="select-cell" onClick={(event) => event.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          aria-label={t("selectEmployeeAria", { name: displayEmployeeName(employee) || employee.enrollNo })}
+                          checked={bulkSelectedEmployeeIds.includes(employee.id)}
+                          onChange={(event) => toggleBulkEmployeeSelection(employee.id, event.target.checked)}
+                        />
+                      </td>
                       <td className="entity-row-key">{employee.enrollNo}</td>
                       <td>{displayEmployeeName(employee) || t("unnamedEmployee")}</td>
                       <td>{translateDataValue(employee.department, lang)}</td>
                       <td>{shift ? translateDataValue(shift.name, lang) : "-"}</td>
+                      <td>
+                        <div className="condition-pill-list">
+                          {employeeConditionSummary(employee).map((item) => <span className="mini-pill" key={item}>{item}</span>)}
+                        </div>
+                      </td>
                       <td>
                         <span className={cx("mini-pill", employee.active ? "mini-pill-good" : "mini-pill-muted")}>
                           {employee.active ? t("active") : t("inactive")}
@@ -2131,7 +2470,7 @@ function App() {
                   );
                 })}
                 {visibleEmployees.length === 0 ? (
-                  <tr><td colSpan={5} className="empty-cell">{t("noEmployeeFound")}</td></tr>
+                  <tr><td colSpan={7} className="empty-cell">{t("noEmployeeFound")}</td></tr>
                 ) : null}
               </tbody>
             </table>
@@ -2278,6 +2617,34 @@ function App() {
                   onChange={(event) => patchEmployee(selectedEmployee.id, { workLengthHours: Number(event.target.value) })}
                 />
                 <small className="field-help">{t(selectedEmployee.flexibleWork ? "employeeFlexibleWorkHelp" : "employeeFlexibleWorkDisabledHelp")}</small>
+              </Field>
+              <label className="toggle-line">
+                <input
+                  type="checkbox"
+                  checked={selectedEmployee.flexibleLunch}
+                  onChange={(event) => patchEmployee(selectedEmployee.id, { flexibleLunch: event.target.checked })}
+                />
+                <span>{t("employeeFlexibleLunchToggle")}</span>
+              </label>
+              <Field label={t("employeeLunchMinutesLabel")}>
+                <input
+                  type="number"
+                  min="0"
+                  step="5"
+                  value={selectedEmployee.lunchMinutes}
+                  disabled={!selectedEmployee.flexibleLunch}
+                  onChange={(event) => patchEmployee(selectedEmployee.id, { lunchMinutes: Number(event.target.value) })}
+                />
+                <small className="field-help">{t(selectedEmployee.flexibleLunch ? "employeeFlexibleLunchHelp" : "employeeFlexibleLunchDisabledHelp")}</small>
+              </Field>
+              <Field label={t("employeeGraceMinutesLabel")}>
+                <input
+                  type="number"
+                  min="0"
+                  step="5"
+                  value={selectedEmployee.graceMinutes}
+                  onChange={(event) => patchEmployee(selectedEmployee.id, { graceMinutes: Number(event.target.value) })}
+                />
               </Field>
             </div>
             <div className="subsection-grid">
@@ -2562,8 +2929,8 @@ function App() {
                   <th></th>
                   <th>{t("shiftNameLabel")}</th>
                   <th>{t("shiftCodeLabel")}</th>
-                  <th>{t("shiftFixedHoursLabel")}</th>
                   <th>{t("schedHeaderStart")}</th>
+                  <th>{t("shiftLunchWindowLabel")}</th>
                   <th>{t("schedHeaderEnd")}</th>
                 </tr>
               </thead>
@@ -2582,8 +2949,8 @@ function App() {
                       <td><span className="shift-color-dot" style={{ background: shift.color }} /></td>
                       <td className="entity-row-key">{translateDataValue(shift.name, lang)}</td>
                       <td>{shift.code}</td>
-                      <td>{shift.workLengthHours}h</td>
                       <td>{scheduleTimeLabel(monSched, "start", lang)}</td>
+                      <td>{scheduleTimeLabel(monSched, "lunchStart", lang)} - {scheduleTimeLabel(monSched, "lunchEnd", lang)}</td>
                       <td>{scheduleTimeLabel(monSched, "end", lang)}</td>
                     </tr>
                   );
@@ -2613,27 +2980,9 @@ function App() {
         <section className="panel">
           <SectionTitle title={t("shiftOptionsTitle")} />
 
-          <div className="form-grid four">
+          <div className="form-grid three">
             <Field label={t("shiftNameLabel")}><input value={translateDataValue(selectedShift.name, lang)} onChange={(event) => patchShift(selectedShift.id, { name: event.target.value })} /></Field>
             <Field label={t("shiftCodeLabel")}><input value={selectedShift.code} onChange={(event) => patchShift(selectedShift.id, { code: event.target.value })} /></Field>
-            <Field label={t("shiftFixedHoursLabel")}>
-              <input type="number" min="1" step="0.5" value={selectedShift.workLengthHours} onChange={(event) => patchShift(selectedShift.id, { workLengthHours: Number(event.target.value) })} />
-            </Field>
-            <Field label={t("shiftGraceLabel")}>
-              <input
-                type="number"
-                min="0"
-                value={selectedShift.graceMinutes}
-                onChange={(event) => patchShift(selectedShift.id, { graceMinutes: Number(event.target.value) })}
-              />
-            </Field>
-            <label className="toggle-line">
-              <input type="checkbox" checked={selectedShift.flexibleLunch} onChange={(event) => patchShift(selectedShift.id, { flexibleLunch: event.target.checked })} />
-              <span>{t("shiftFlexibleLunchToggle")}</span>
-            </label>
-            <Field label={t("shiftLunchMinutesLabel")}>
-              <input type="number" min="0" value={selectedShift.lunchMinutes} onChange={(event) => patchShift(selectedShift.id, { lunchMinutes: Number(event.target.value) })} />
-            </Field>
             <Field label={t("shiftColorLabel")}>
               <input type="color" value={selectedShift.color} onChange={(event) => patchShift(selectedShift.id, { color: event.target.value })} />
             </Field>
@@ -2695,18 +3044,9 @@ function App() {
               })
               .sort((a, b) => a.diff - b.diff);
             const winner = candidates[0]?.shift;
-            const winnerStartMin = candidates[0] ? minutesFromTime(candidates[0].startStr) : 0;
-            const punchMin = minutesFromTime(autoShiftSimTime);
-            const lateRaw = winner ? Math.max(0, punchMin - winnerStartMin) : 0;
-            const grace = winner?.graceMinutes ?? 0;
-            const lateAfterGrace = Math.max(0, lateRaw - grace);
             const verdict = !winner
               ? t("autoShiftSimVerdictNoFixedShift")
-              : lateRaw === 0
-                  ? t("autoShiftSimVerdictOnTime")
-                  : lateAfterGrace === 0
-                    ? t("autoShiftSimVerdictWithinGrace", { lateRaw, grace })
-                    : t("autoShiftSimVerdictLate", { late: lateAfterGrace, grace });
+              : t("autoShiftSimVerdictClosest", { shift: translateDataValue(winner.name, lang) });
 
             return (
               <div className="auto-shift-sim">
@@ -2737,7 +3077,7 @@ function App() {
                   </div>
                   <div>
                     <span className="mini-label">{t("autoShiftSimVerdictLabel")}</span>
-                    <strong className={cx(!winner || lateAfterGrace > 0 ? "auto-shift-sim-bad" : "auto-shift-sim-good")}>
+                    <strong className={cx(!winner ? "auto-shift-sim-bad" : "auto-shift-sim-good")}>
                       {verdict}
                     </strong>
                   </div>
