@@ -245,6 +245,7 @@ export function createSeedData(): AppData {
       { id: "leave-002", employeeId: "emp-003", date: "2026-04-17", type: "病假", hours: 8, note: "MC" },
     ],
     punches: buildSeedPunches(),
+    attendanceReviews: [],
     settings: {
       businessDate: dateKey(new Date(2026, 3, 24)),
       defaultMonth: "2026-04",

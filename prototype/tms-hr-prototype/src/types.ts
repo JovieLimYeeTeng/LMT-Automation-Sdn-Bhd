@@ -120,6 +120,19 @@ export interface Punch {
   rawDateTime?: string;
 }
 
+export type AttendanceReviewKind = "shortHours";
+export type AttendanceReviewDecision = "accepted" | "deducted";
+
+export interface AttendanceReview {
+  id: string;
+  employeeId: string;
+  date: string;
+  kind: AttendanceReviewKind;
+  decision: AttendanceReviewDecision;
+  note: string;
+  updatedAt: string;
+}
+
 export interface AppSettings {
   businessDate: string;
   defaultMonth: string;
@@ -141,6 +154,7 @@ export interface AppData {
   holidays: Holiday[];
   leaves: LeaveEntry[];
   punches: Punch[];
+  attendanceReviews: AttendanceReview[];
   settings: AppSettings;
 }
 
@@ -152,6 +166,8 @@ export type FlagToken =
   | { kind: "ot"; minutes: number }
   | { kind: "lunchOver"; minutes: number }
   | { kind: "underWork"; hours: number }
+  | { kind: "underWorkAccepted"; hours: number }
+  | { kind: "underWorkDeducted"; hours: number }
   | { kind: "noRecord" }
   | { kind: "noShift" }
   | { kind: "missingPunch" }

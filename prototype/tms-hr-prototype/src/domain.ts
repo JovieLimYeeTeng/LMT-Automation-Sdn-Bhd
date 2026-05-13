@@ -1,6 +1,7 @@
 import { dict, makeT, translateDataValue, type Lang } from "./i18n";
 import type {
   AppData,
+  AttendanceReviewDecision,
   AttendanceRecord,
   AttendanceStatus,
   DaySchedule,
@@ -12,6 +13,7 @@ import type {
   PunchKind,
   Shift,
   ShiftSource,
+  AttendanceReviewKind,
   Weekday,
 } from "./types";
 
@@ -94,6 +96,10 @@ export function formatFlag(flag: FlagToken, lang: Lang): string {
       return t("flagLunchOver", { duration: formatDuration(flag.minutes) });
     case "underWork":
       return t("flagUnderWork", { hours: flag.hours });
+    case "underWorkAccepted":
+      return t("flagUnderWorkAccepted", { hours: flag.hours });
+    case "underWorkDeducted":
+      return t("flagUnderWorkDeducted", { hours: flag.hours });
     case "noRecord":
       return t("flagNoRecord");
     case "noShift":
@@ -146,6 +152,33 @@ export function createStandardWeek(
     },
     {} as Record<Weekday, DaySchedule>,
   );
+}
+
+export function attendanceReviewId(employeeId: string, date: string, kind: AttendanceReviewKind): string {
+  return `review-${employeeId}-${date}-${kind}`;
+}
+
+export function isAttendanceReviewAccepted(
+  data: AppData,
+  employeeId: string,
+  date: string,
+  kind: AttendanceReviewKind,
+): boolean {
+  return getAttendanceReviewDecision(data, employeeId, date, kind) === "accepted";
+}
+
+export function getAttendanceReviewDecision(
+  data: AppData,
+  employeeId: string,
+  date: string,
+  kind: AttendanceReviewKind,
+): AttendanceReviewDecision | undefined {
+  return (data.attendanceReviews ?? []).find(
+    (review) =>
+      review.employeeId === employeeId &&
+      review.date === date &&
+      review.kind === kind,
+  )?.decision;
 }
 
 export function parseDate(date: string): Date {
@@ -427,7 +460,16 @@ export function calculateAttendance(
   if (overtimeMinutes > 0) flags.push({ kind: "ot", minutes: overtimeMinutes });
   if (lunchOverMinutes > 0) flags.push({ kind: "lunchOver", minutes: lunchOverMinutes });
   if (shift.flexibleWork && workMinutes < shift.workLengthHours * 60) {
-    flags.push({ kind: "underWork", hours: shift.workLengthHours });
+    const shortHoursDecision = getAttendanceReviewDecision(data, employee.id, date, "shortHours");
+    flags.push({
+      kind:
+        shortHoursDecision === "accepted"
+          ? "underWorkAccepted"
+          : shortHoursDecision === "deducted"
+            ? "underWorkDeducted"
+            : "underWork",
+      hours: shift.workLengthHours,
+    });
   }
 
   let status: AttendanceStatus = "present";
@@ -490,12 +532,17 @@ export function payrollFor(data: AppData, employee: Employee, month: string) {
     employee.salary.type === "monthly" ? summary.absentDays * employee.salary.leaveDeductPerDay : 0;
   const unpaidLeaveDeduct =
     employee.salary.type === "monthly" ? summary.deductibleLeaveDays * employee.salary.leaveDeductPerDay : 0;
-  const totalDeduct = absentDeduct + unpaidLeaveDeduct;
+  const shortHoursDeduct =
+    employee.salary.type === "monthly" ? (summary.deductedShortHoursMinutes / 60) * employee.salary.hourlyRate : 0;
+  const totalDeduct = absentDeduct + unpaidLeaveDeduct + shortHoursDeduct;
   const leaveDeduct = unpaidLeaveDeduct;
   const gross = base + otPay - totalDeduct;
   const warningFlags = [
     summary.missingCount > 0 ? "missing" : "",
     summary.absentDays > 0 ? "absent" : "",
+    summary.shortHoursCount > 0 ? "shortHours" : "",
+    summary.acceptedShortHoursCount > 0 ? "acceptedShortHours" : "",
+    summary.deductedShortHoursCount > 0 ? "deductedShortHours" : "",
     summary.lateCount > 0 || summary.earlyCount > 0 ? "lateEarly" : "",
     summary.overtimeMinutes > 0 ? "overtime" : "",
     summary.deductibleLeaveDays > 0 ? "unpaidLeave" : "",
@@ -514,6 +561,7 @@ export function payrollFor(data: AppData, employee: Employee, month: string) {
     otPay,
     absentDeduct,
     unpaidLeaveDeduct,
+    shortHoursDeduct,
     leaveDeduct,
     totalDeduct,
     gross,
@@ -528,10 +576,11 @@ export function getMonthlyReadiness(data: AppData, month: string, employees = da
   const monthLeaveCount = data.leaves.filter((leave) => leave.date.startsWith(month)).length;
   const missingCount = records.filter((record) => record.status === "incomplete").length;
   const absentCount = records.filter((record) => record.status === "absent").length;
+  const shortHoursCount = records.filter((record) => record.flags.some((flag) => flag.kind === "underWork")).length;
   const lateEarlyCount = records.filter((record) => record.lateMinutes > 0 || record.earlyMinutes > 0).length;
   const lunchOverCount = records.filter((record) => record.flags.some((flag) => flag.kind === "lunchOver")).length;
   const overtimeCount = records.filter((record) => record.overtimeMinutes > 0).length;
-  const unresolvedCount = missingCount + absentCount + lateEarlyCount + lunchOverCount + overtimeCount;
+  const unresolvedCount = missingCount + absentCount + shortHoursCount + lateEarlyCount + lunchOverCount + overtimeCount;
   const hasOperationalData = monthPunchCount > 0 || monthLeaveCount > 0;
 
   return {
@@ -540,6 +589,7 @@ export function getMonthlyReadiness(data: AppData, month: string, employees = da
     monthLeaveCount,
     missingCount: hasOperationalData ? missingCount : 0,
     absentCount: hasOperationalData ? absentCount : 0,
+    shortHoursCount: hasOperationalData ? shortHoursCount : 0,
     lateEarlyCount: hasOperationalData ? lateEarlyCount : 0,
     lunchOverCount: hasOperationalData ? lunchOverCount : 0,
     overtimeCount: hasOperationalData ? overtimeCount : 0,
@@ -564,7 +614,15 @@ export function summarizeEmployee(data: AppData, employee: Employee, month: stri
     deductibleLeaveDays: leaveRecords.filter((record) => !isPaidLeaveType(record.leave!.type, data)).length,
     lateCount: records.filter((record) => record.lateMinutes > 0).length,
     earlyCount: records.filter((record) => record.earlyMinutes > 0).length,
-    missingCount: records.filter((record) => record.missing).length,
+    missingCount: records.filter((record) => record.status === "incomplete").length,
+    shortHoursCount: records.filter((record) => record.flags.some((flag) => flag.kind === "underWork")).length,
+    acceptedShortHoursCount: records.filter((record) => record.flags.some((flag) => flag.kind === "underWorkAccepted")).length,
+    deductedShortHoursCount: records.filter((record) => record.flags.some((flag) => flag.kind === "underWorkDeducted")).length,
+    deductedShortHoursMinutes: records.reduce((sum, record) => {
+      const deductedFlag = record.flags.find((flag) => flag.kind === "underWorkDeducted");
+      if (!deductedFlag || record.workMinutes <= 0) return sum;
+      return sum + Math.max(0, deductedFlag.hours * 60 - record.workMinutes);
+    }, 0),
     workMinutes: records.reduce((sum, record) => sum + record.workMinutes, 0),
     overtimeMinutes: records.reduce((sum, record) => sum + record.overtimeMinutes, 0),
   };

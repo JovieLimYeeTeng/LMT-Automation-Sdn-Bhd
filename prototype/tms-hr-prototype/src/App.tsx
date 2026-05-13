@@ -32,16 +32,20 @@ import {
   Wallet,
   Wand2,
   WifiOff,
+  Menu,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import {
   calculateAttendance,
   DEFAULT_PAID_LEAVE_TYPES,
+  attendanceReviewId,
   displayEmployeeName,
   findShiftForPunch,
   formatDuration,
   formatFlags,
   formatHours,
+  getAttendanceReviewDecision,
   getMonthlyReadiness,
   getRecordsForMonth,
   getWeekday,
@@ -68,6 +72,7 @@ import {
 } from "./i18n";
 import type {
   AppData,
+  AttendanceReviewDecision,
   AttendanceRecord,
   DaySchedule,
   Employee,
@@ -138,6 +143,7 @@ function hydrateData(raw: AppData): AppData {
     ...raw,
     employees: raw.employees.map(hydrateEmployee),
     shifts: raw.shifts.map(hydrateShift),
+    attendanceReviews: raw.attendanceReviews ?? [],
     settings: {
       ...raw.settings,
       leaveTypes,
@@ -157,7 +163,7 @@ function hydrateData(raw: AppData): AppData {
 }
 
 type ReportId = "personal" | "summary" | "punchGrid" | "lateEarly" | "leave" | "overtime" | "absent" | "raw";
-type TimecardStatusFilter = "all" | "absent" | "incomplete" | "lateEarly";
+type TimecardStatusFilter = "all" | "absent" | "incomplete" | "shortHours" | "lateEarly" | "overtime";
 
 const copy = dict;
 
@@ -190,7 +196,7 @@ function loadInitialData(): AppData {
     try { return hydrateData(JSON.parse(saved) as AppData); }
     catch { return createSeedData(); }
   })();
-  return { ...base, punches: [], leaves: [] };
+  return { ...base, punches: [], leaves: [], attendanceReviews: [] };
 }
 
 function cx(...parts: Array<string | false | undefined>): string {
@@ -406,6 +412,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(data.settings.businessDate);
   const [punchTimes, setPunchTimes] = useState<Record<PunchKind, string>>(emptyPunchTimes);
   const [punchNote, setPunchNote] = useState("");
+  const [shortHoursDecision, setShortHoursDecision] = useState<"" | AttendanceReviewDecision>("");
   const [importMessage, setImportMessage] = useState("");
   const [savedToast, setSavedToast] = useState<{ id: number; text: string } | null>(null);
   const showSavedToast = (text: string = t("savedToast")) => {
@@ -426,6 +433,7 @@ function App() {
   const [timecardPage, setTimecardPage] = useState(1);
   const [timecardPageSize, setTimecardPageSize] = useState(10);
   const [timecardDetailOpen, setTimecardDetailOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reportType, setReportType] = useState<ReportId>("summary");
   const [companyFilter, setCompanyFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
@@ -572,6 +580,7 @@ function App() {
         breakIn: record.breakIn,
         out: record.clockOut,
       });
+      setShortHoursDecision(getAttendanceReviewDecision(data, selectedEmployee.id, selectedDate, "shortHours") ?? "");
     }
   }, [data, selectedDate, selectedEmployee]);
 
@@ -783,16 +792,37 @@ function App() {
         ...nextPunches,
       ],
     };
-    const nextRecord = calculateAttendance(nextData, selectedEmployee, selectedDate);
+    const nextRecordBeforeReview = calculateAttendance(nextData, selectedEmployee, selectedDate);
+    const reviewableShortHours = nextRecordBeforeReview.flags.some((flag) => flag.kind === "underWork" || flag.kind === "underWorkAccepted");
+    const reviewId = attendanceReviewId(selectedEmployee.id, selectedDate, "shortHours");
+    const reviewedData = {
+      ...nextData,
+      attendanceReviews: [
+        ...(nextData.attendanceReviews ?? []).filter((review) => review.id !== reviewId),
+        ...(shortHoursDecision && reviewableShortHours
+          ? [{
+              id: reviewId,
+              employeeId: selectedEmployee.id,
+              date: selectedDate,
+              kind: "shortHours" as const,
+              decision: shortHoursDecision,
+              note: punchNote || (shortHoursDecision === "deducted" ? t("shortHoursDeductedDefaultNote") : t("shortHoursAcceptedDefaultNote")),
+              updatedAt: new Date().toISOString(),
+            }]
+          : []),
+      ],
+    };
+    const nextRecord = calculateAttendance(reviewedData, selectedEmployee, selectedDate);
     const stillPending =
       nextRecord.status === "absent" ||
       nextRecord.status === "incomplete" ||
       nextRecord.lateMinutes > 0 ||
       nextRecord.earlyMinutes > 0 ||
-      nextRecord.flags.some((flag) => flag.kind === "lunchOver");
+      nextRecord.overtimeMinutes > 0 ||
+      nextRecord.flags.some((flag) => flag.kind === "lunchOver" || flag.kind === "underWork");
 
-    setData(nextData);
-    showSavedToast(stillPending ? t("timecardSavedStillPending") : t("timecardSavedResolved"));
+    setData(reviewedData);
+    showSavedToast(stillPending ? t("timecardSavedStillPending") : shortHoursDecision && reviewableShortHours ? t("timecardSavedReviewed") : t("timecardSavedResolved"));
     setPunchNote("");
   }
 
@@ -900,6 +930,7 @@ function App() {
         // salaries, shifts, departments, holidays, or security settings.
         leaves: [...current.leaves.filter((leave) => !sampleLeaveIds.has(leave.id)), ...seed.leaves],
         punches: seed.punches,
+        attendanceReviews: [],
       };
     });
     setSelectedMonth(seed.settings.defaultMonth);
@@ -914,7 +945,7 @@ function App() {
   }
 
   function clearImportedPunches() {
-    setData((current) => ({ ...current, punches: [], leaves: [] }));
+    setData((current) => ({ ...current, punches: [], leaves: [], attendanceReviews: [] }));
     setImportMessage(t("demoClearedMessage"));
   }
 
@@ -1018,11 +1049,14 @@ function App() {
     absentCount: monthRecords.filter((record) => record.status === "absent").length,
     leaveCount: monthRecords.filter((record) => record.status === "leave").length,
     overtimeHours: formatHours(monthRecords.reduce((sum, record) => sum + record.overtimeMinutes, 0)),
+    overtimeCount: monthRecords.filter((record) => record.overtimeMinutes > 0).length,
     lateEarlyCount: monthRecords.filter((record) => record.lateMinutes > 0 || record.earlyMinutes > 0).length,
     lunchOverCount: monthRecords.filter((record) => record.flags.some((f) => f.kind === "lunchOver")).length,
+    shortHoursCount: monthRecords.filter((record) => record.flags.some((f) => f.kind === "underWork")).length,
   };
 
   const selectedDateRecord = selectedEmployee ? calculateAttendance(data, selectedEmployee, selectedDate) : undefined;
+  const activeNavLabel = navItems.find((item) => item.id === activeView)?.label[lang] ?? t("appName");
 
   const report = useMemo(() => buildReport(reportType, filteredRecords, filteredEmployees, data, selectedMonth, selectedEmployeeId, lang), [
     data,
@@ -1132,8 +1166,19 @@ function App() {
             <strong>{t("appName")}</strong>
             <span>{t("appSubtitle")}</span>
           </div>
+          <button
+            type="button"
+            className="mobile-menu-button"
+            aria-expanded={mobileMenuOpen}
+            aria-label={mobileMenuOpen ? t("mobileMenuClose") : t("mobileMenuOpen")}
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            {mobileMenuOpen ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
+            <span>{activeNavLabel}</span>
+          </button>
         </div>
 
+        <div className={cx("mobile-menu-panel", mobileMenuOpen && "mobile-menu-open")}>
         <nav className="nav-list" aria-label={t("mainNav")}>
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -1144,9 +1189,11 @@ function App() {
                 onClick={() => {
                   if (item.id === "thisMonth") {
                     openThisMonth("home");
+                    setMobileMenuOpen(false);
                     return;
                   }
                   setActiveView(item.id);
+                  setMobileMenuOpen(false);
                 }}
               >
                 <Icon size={18} aria-hidden="true" />
@@ -1175,13 +1222,14 @@ function App() {
             <span>{t("lockSwitchUser")}</span>
           </button>
         ) : null}
+        </div>
       </aside>
 
       <main className="workspace">
         <header className="topbar">
           <div>
             <p className="eyebrow">{t("eyebrow")}</p>
-            <h1>{navItems.find((item) => item.id === activeView)?.label[lang]}</h1>
+            <h1>{activeNavLabel}</h1>
           </div>
           <div className="topbar-controls">
             {activeView !== "settings" ? (
@@ -1374,12 +1422,14 @@ function App() {
     const monthPunchCount = monthPunches.length;
     const monthLeaves = data.leaves.filter((l) => l.date.startsWith(selectedMonth));
     const monthLeaveCount = monthLeaves.length;
-    const pendingCount = dashboard.missingCount + dashboard.absentCount + dashboard.lateEarlyCount + dashboard.lunchOverCount;
+    const pendingCount = dashboard.missingCount + dashboard.absentCount + dashboard.shortHoursCount + dashboard.lateEarlyCount + dashboard.lunchOverCount + dashboard.overtimeCount;
     const hasOperationalData = monthPunchCount > 0 || monthLeaveCount > 0;
     const actionablePendingCount = hasOperationalData ? pendingCount : 0;
     const actionableAbsentCount = hasOperationalData ? dashboard.absentCount : 0;
     const actionableMissingCount = hasOperationalData ? dashboard.missingCount : 0;
+    const actionableShortHoursCount = hasOperationalData ? dashboard.shortHoursCount : 0;
     const actionableLateEarlyCount = hasOperationalData ? dashboard.lateEarlyCount : 0;
+    const actionableOvertimeCount = hasOperationalData ? dashboard.overtimeCount : 0;
     const actionableOvertimeHours = hasOperationalData ? dashboard.overtimeHours : "-";
     const monthLabel = (() => {
       try {
@@ -1457,8 +1507,10 @@ function App() {
             </header>
             <div className="overview-breakdown">
               <div><span>{t("metricMissingPunch")}</span><strong>{actionableMissingCount}</strong></div>
+              <div><span>{t("metricShortHours")}</span><strong>{actionableShortHoursCount}</strong></div>
               <div><span>{t("metricLateEarly")}</span><strong>{actionableLateEarlyCount}</strong></div>
               <div><span>{t("metricAbsentDays")}</span><strong>{actionableAbsentCount}</strong></div>
+              <div><span>{t("payrollOtWarnings")}</span><strong>{actionableOvertimeCount}</strong></div>
             </div>
           </button>
 
@@ -1499,7 +1551,7 @@ function App() {
   function renderImportData() {
     const monthPunches = data.punches.filter((punch) => punch.date.startsWith(selectedMonth));
     const importExceptions = monthRecords
-      .filter((record) => record.status === "absent" || record.missing || record.lateMinutes > 0 || record.earlyMinutes > 0 || record.flags.some((f) => f.kind === "lunchOver"))
+      .filter((record) => record.status === "absent" || record.status === "incomplete" || record.lateMinutes > 0 || record.earlyMinutes > 0 || record.overtimeMinutes > 0 || record.flags.some((f) => f.kind === "lunchOver" || f.kind === "underWork"))
       .slice(0, 10);
     const recentPunches = [...data.punches]
       .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))
@@ -2065,6 +2117,7 @@ function App() {
                     <div><span>{t("payrollPreviewDeductibleLeaveDays")}</span><strong>{pay.summary.deductibleLeaveDays}</strong></div>
                     <div><span>{t("payrollPreviewBase")}</span><strong>{fmt(pay.base)}</strong></div>
                     <div><span>{t("payrollPreviewOtPay")}</span><strong>{fmt(pay.otPay)}</strong></div>
+                    <div><span>{t("payrollColShortHoursDeduct")}</span><strong>−{fmt(pay.shortHoursDeduct)}</strong></div>
                     <div><span>{t("payrollColTotalDeduct")}</span><strong>−{fmt(pay.totalDeduct)}</strong></div>
                     <div className="payroll-preview-gross"><span>{t("payrollPreviewGross")}</span><strong>{fmt(pay.gross)}</strong></div>
                   </div>
@@ -2433,20 +2486,24 @@ function App() {
     const hasOperationalData = data.punches.some((punch) => punch.date.startsWith(selectedMonth)) || data.leaves.some((leave) => leave.date.startsWith(selectedMonth));
     const pendingRecords = hasOperationalData
       ? monthRecords
-          .filter((record) => record.status === "absent" || record.status === "incomplete" || record.lateMinutes > 0 || record.earlyMinutes > 0 || record.flags.some((f) => f.kind === "lunchOver"))
+          .filter((record) => record.status === "absent" || record.status === "incomplete" || record.lateMinutes > 0 || record.earlyMinutes > 0 || record.overtimeMinutes > 0 || record.flags.some((f) => f.kind === "lunchOver" || f.kind === "underWork"))
           .sort((a, b) => `${a.date} ${a.employee.enrollNo}`.localeCompare(`${b.date} ${b.employee.enrollNo}`))
       : [];
     const pendingStats = {
       all: pendingRecords.length,
       absent: pendingRecords.filter((record) => record.status === "absent").length,
       incomplete: pendingRecords.filter((record) => record.status === "incomplete").length,
+      shortHours: pendingRecords.filter((record) => record.flags.some((flag) => flag.kind === "underWork")).length,
       lateEarly: pendingRecords.filter((record) => record.lateMinutes > 0 || record.earlyMinutes > 0).length,
+      overtime: pendingRecords.filter((record) => record.overtimeMinutes > 0).length,
     };
     const normalizedSearch = timecardSearch.trim().toLowerCase();
     const filteredPendingRecords = pendingRecords.filter((record) => {
       if (timecardStatusFilter === "absent" && record.status !== "absent") return false;
       if (timecardStatusFilter === "incomplete" && record.status !== "incomplete") return false;
+      if (timecardStatusFilter === "shortHours" && !record.flags.some((flag) => flag.kind === "underWork")) return false;
       if (timecardStatusFilter === "lateEarly" && record.lateMinutes === 0 && record.earlyMinutes === 0) return false;
+      if (timecardStatusFilter === "overtime" && record.overtimeMinutes === 0) return false;
       if (!normalizedSearch) return true;
       const haystack = [
         record.date,
@@ -2470,12 +2527,24 @@ function App() {
     const shiftOverride = selectedEmployee?.shiftOverrides?.[selectedDate] ?? "";
     const restOverride = selectedEmployee?.restOverrides?.[selectedDate];
     const currentRestValue = restOverride === undefined ? "" : restOverride ? "rest" : "work";
+    const selectedShortHoursReviewable = selectedDateRecord?.flags.some((flag) => flag.kind === "underWork" || flag.kind === "underWorkAccepted" || flag.kind === "underWorkDeducted") ?? false;
+    const reviewedItems = (data.attendanceReviews ?? [])
+      .filter((review) => review.date.startsWith(selectedMonth))
+      .map((review) => {
+        const employee = data.employees.find((item) => item.id === review.employeeId);
+        const record = employee ? calculateAttendance(data, employee, review.date) : undefined;
+        return { review, employee, record };
+      })
+      .filter((item): item is { review: NonNullable<AppData["attendanceReviews"]>[number]; employee: Employee; record: AttendanceRecord } => Boolean(item.employee && item.record))
+      .sort((a, b) => `${b.review.updatedAt}${b.review.employeeId}`.localeCompare(`${a.review.updatedAt}${a.review.employeeId}`));
 
     if (!timecardDetailOpen) {
       const statCards: Array<{ id: TimecardStatusFilter; label: string; value: number; tone: "neutral" | "warn" | "bad" | "good"; icon: LucideIcon }> = [
         { id: "all", label: t("timecardsFilterAll"), value: pendingStats.all, tone: pendingStats.all > 0 ? "warn" : "good", icon: Wand2 },
         { id: "incomplete", label: t("timecardsFilterMissing"), value: pendingStats.incomplete, tone: pendingStats.incomplete > 0 ? "warn" : "good", icon: AlertTriangle },
+        { id: "shortHours", label: t("timecardsFilterShortHours"), value: pendingStats.shortHours, tone: pendingStats.shortHours > 0 ? "warn" : "good", icon: Clock3 },
         { id: "lateEarly", label: t("timecardsFilterLateEarly"), value: pendingStats.lateEarly, tone: pendingStats.lateEarly > 0 ? "warn" : "good", icon: Clock3 },
+        { id: "overtime", label: t("payrollOtWarnings"), value: pendingStats.overtime, tone: pendingStats.overtime > 0 ? "neutral" : "good", icon: Wallet },
         { id: "absent", label: t("timecardsFilterAbsent"), value: pendingStats.absent, tone: pendingStats.absent > 0 ? "bad" : "good", icon: WifiOff },
       ];
 
@@ -2518,6 +2587,53 @@ function App() {
             })}
           </div>
 
+          <section className="panel reviewed-records-panel">
+            <SectionTitle
+              title={t("reviewedRecordsTitle")}
+              action={<span className="setting-list-count">{t("reviewedRecordsCount", { count: reviewedItems.length })}</span>}
+            />
+            <p className="panel-caption">{t("reviewedRecordsCaption")}</p>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{t("colDate")}</th>
+                    <th>{t("colEmployee")}</th>
+                    <th>{t("reviewDecisionLabel")}</th>
+                    <th>{t("colNotes")}</th>
+                    <th>{t("actions")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reviewedItems.map(({ review, employee, record }) => (
+                    <tr key={review.id}>
+                      <td>{review.date}</td>
+                      <td>{employee.enrollNo} · {displayEmployeeName(employee)}</td>
+                      <td><span className="mini-pill mini-pill-muted">{review.decision === "deducted" ? t("reviewDecisionDeduct") : t("reviewDecisionAccept")}</span></td>
+                      <td>{review.note || formatFlags(record.flags, lang)}</td>
+                      <td>
+                        <Button
+                          icon={Wand2}
+                          variant="secondary"
+                          onClick={() => {
+                            setSelectedEmployeeId(employee.id);
+                            setSelectedDate(review.date);
+                            setTimecardDetailOpen(true);
+                          }}
+                        >
+                          {t("openDetail")}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {reviewedItems.length === 0 ? (
+                    <tr><td colSpan={5} className="empty-cell">{t("reviewedRecordsEmpty")}</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
           <section className="panel">
             <SectionTitle
               title={t("timecardsPendingDatesTitle")}
@@ -2547,7 +2663,9 @@ function App() {
                 >
                   <option value="all">{t("timecardsFilterAll")}</option>
                   <option value="incomplete">{t("timecardsFilterMissing")}</option>
+                  <option value="shortHours">{t("timecardsFilterShortHours")}</option>
                   <option value="lateEarly">{t("timecardsFilterLateEarly")}</option>
+                  <option value="overtime">{t("payrollOtWarnings")}</option>
                   <option value="absent">{t("timecardsFilterAbsent")}</option>
                 </select>
               </Field>
@@ -2717,6 +2835,32 @@ function App() {
               {selectedDateRecord.workMinutes > 0 ? (
                 <span className="muted">{t("workHoursPrefix")} {formatHours(selectedDateRecord.workMinutes)}h</span>
               ) : null}
+            </div>
+          ) : null}
+
+          {selectedShortHoursReviewable ? (
+            <div className={cx("short-hours-review-box", shortHoursDecision && "short-hours-review-box-accepted", shortHoursDecision === "deducted" && "short-hours-review-box-deducted")}>
+              <div>
+                <strong>{t("shortHoursReviewTitle")}</strong>
+                <small>{t("shortHoursReviewHint")}</small>
+              </div>
+              <div className="short-hours-review-options">
+                {[
+                  { value: "", label: t("reviewDecisionPending") },
+                  { value: "accepted", label: t("reviewDecisionAccept") },
+                  { value: "deducted", label: t("reviewDecisionDeduct") },
+                ].map((option) => (
+                  <label key={option.value}>
+                    <input
+                      type="radio"
+                      name="short-hours-decision"
+                      checked={shortHoursDecision === option.value}
+                      onChange={() => setShortHoursDecision(option.value as "" | AttendanceReviewDecision)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           ) : null}
 
@@ -3052,6 +3196,7 @@ function App() {
               otPay: pay.otPay,
               absentDays: pay.summary.absentDays,
               unpaidLeaveDays: pay.summary.deductibleLeaveDays,
+              shortHoursDeduct: pay.shortHoursDeduct,
               totalDeduct: pay.totalDeduct,
               gross: pay.gross,
               proration: pay.proration,
@@ -3085,6 +3230,12 @@ function App() {
             return t("metricAbsentDays");
           case "lateEarly":
             return t("metricLateEarly");
+          case "shortHours":
+            return t("metricShortHours");
+          case "acceptedShortHours":
+            return t("payrollAcceptedShortHours");
+          case "deductedShortHours":
+            return t("payrollDeductedShortHours");
           case "overtime":
             return t("payrollOtWarnings");
           case "unpaidLeave":
@@ -3113,6 +3264,7 @@ function App() {
         t("salaryCurrencyLabel"),
         t("payrollColBase"),
         t("payrollColOtPay"),
+        t("payrollColShortHoursDeduct"),
         t("payrollColTotalDeduct"),
         t("payrollColGross"),
       ];
@@ -3132,6 +3284,7 @@ function App() {
         [t("salaryCurrencyLabel")]: row.employee.salary.currency,
         [t("payrollColBase")]: row.base.toFixed(2),
         [t("payrollColOtPay")]: row.otPay.toFixed(2),
+        [t("payrollColShortHoursDeduct")]: row.shortHoursDeduct.toFixed(2),
         [t("payrollColTotalDeduct")]: row.totalDeduct.toFixed(2),
         [t("payrollColGross")]: row.gross.toFixed(2),
       }));
@@ -3190,6 +3343,7 @@ function App() {
                   <th>{t("payrollColOtWarning")}</th>
                   <th className="num">{t("payrollColBase")}</th>
                   <th className="num">{t("payrollColOtPay")}</th>
+                  <th className="num">{t("payrollColShortHoursDeduct")}</th>
                   <th className="num">{t("payrollColTotalDeduct")}</th>
                   <th className="num">{t("payrollColGross")}</th>
                 </tr>
@@ -3220,9 +3374,9 @@ function App() {
                       <span
                         className={cx(
                           "mini-pill",
-                          row.warningFlags.some((flag) => flag !== "overtime")
+                          row.warningFlags.some((flag) => flag !== "overtime" && flag !== "acceptedShortHours" && flag !== "deductedShortHours")
                             ? "mini-pill-warn"
-                            : row.warningFlags.includes("overtime")
+                            : row.warningFlags.some((flag) => flag === "overtime" || flag === "acceptedShortHours" || flag === "deductedShortHours")
                               ? "mini-pill-muted"
                               : "mini-pill-good",
                         )}
@@ -3232,18 +3386,19 @@ function App() {
                     </td>
                     <td className="num">{row.employee.salary.currency} {row.base.toFixed(2)}</td>
                     <td className="num">{row.employee.salary.currency} {row.otPay.toFixed(2)}</td>
+                    <td className="num">−{row.employee.salary.currency} {row.shortHoursDeduct.toFixed(2)}</td>
                     <td className="num">−{row.employee.salary.currency} {row.totalDeduct.toFixed(2)}</td>
                     <td className="num"><strong>{row.employee.salary.currency} {row.gross.toFixed(2)}</strong></td>
                   </tr>
                 ))}
                 {rows.length === 0 ? (
-                  <tr><td colSpan={15} className="empty-cell">{t("noMatchingRecords")}</td></tr>
+                  <tr><td colSpan={16} className="empty-cell">{t("noMatchingRecords")}</td></tr>
                 ) : null}
               </tbody>
               {rows.length > 0 ? (
                 <tfoot>
                   <tr>
-                    <td colSpan={14} className="num"><strong>{t("payrollGrandTotal")}</strong></td>
+                    <td colSpan={15} className="num"><strong>{t("payrollGrandTotal")}</strong></td>
                     <td className="num"><strong>{Object.entries(grandTotalByCurrency).map(([cur, sum]) => `${cur} ${sum.toFixed(2)}`).join(" / ")}</strong></td>
                   </tr>
                 </tfoot>

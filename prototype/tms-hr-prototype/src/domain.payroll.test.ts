@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createStandardWeek, getMonthlyReadiness, payrollFor } from "./domain";
-import type { AppData, Employee, LeaveEntry, Punch, PunchKind, Shift } from "./types";
+import { attendanceReviewId, createStandardWeek, getMonthlyReadiness, payrollFor } from "./domain";
+import type { AppData, AttendanceReview, Employee, LeaveEntry, Punch, PunchKind, Shift } from "./types";
 
 const shift: Shift = {
   id: "shift-day",
@@ -13,6 +13,13 @@ const shift: Shift = {
   lunchMinutes: 60,
   graceMinutes: 0,
   days: createStandardWeek("09:00", "12:00", "13:00", "18:00", "18:00", [0, 6]),
+};
+
+const flexibleShift: Shift = {
+  ...shift,
+  id: "shift-flex",
+  name: "Flexible 8h",
+  flexibleWork: true,
 };
 
 function employee(overrides: Partial<Employee> = {}): Employee {
@@ -76,13 +83,21 @@ function leave(type: string, date = "2026-04-01"): LeaveEntry {
   return { id: `leave-${type}`, employeeId: "emp-001", date, type, hours: 8, note: "" };
 }
 
-function appData(person: Employee, punches: Punch[] = [], leaves: LeaveEntry[] = [], businessDate = "2026-04-01"): AppData {
+function appData(
+  person: Employee,
+  punches: Punch[] = [],
+  leaves: LeaveEntry[] = [],
+  businessDate = "2026-04-01",
+  shifts: Shift[] = [shift],
+  attendanceReviews: AttendanceReview[] = [],
+): AppData {
   return {
     employees: [person],
-    shifts: [shift],
+    shifts,
     holidays: [],
     leaves,
     punches,
+    attendanceReviews,
     settings: {
       businessDate,
       defaultMonth: "2026-04",
@@ -115,8 +130,21 @@ describe("payrollFor", () => {
     const pay = payrollFor(appData(person), person, "2026-04");
 
     expect(pay.summary.absentDays).toBe(1);
+    expect(pay.summary.missingCount).toBe(0);
     expect(pay.absentDeduct).toBe(100);
     expect(pay.gross).toBe(2900);
+    expect(pay.warningFlags).toContain("absent");
+    expect(pay.warningFlags).not.toContain("missing");
+  });
+
+  it("counts incomplete punches as missing punch, not absent", () => {
+    const person = employee();
+    const pay = payrollFor(appData(person, [punch("in", "09:00")]), person, "2026-04");
+
+    expect(pay.summary.missingCount).toBe(1);
+    expect(pay.summary.absentDays).toBe(0);
+    expect(pay.warningFlags).toContain("missing");
+    expect(pay.warningFlags).not.toContain("absent");
   });
 
   it("deducts unpaid leave from monthly salary", () => {
@@ -144,7 +172,7 @@ describe("payrollFor", () => {
     expect(payrollFor(appData(person, [], [leave("Annual leave")]), person, "2026-04").gross).toBe(80);
   });
 
-  it("adds auto-calculated overtime pay as a payroll warning", () => {
+  it("adds auto-calculated overtime pay as a payroll review item", () => {
     const person = employee();
     const pay = payrollFor(appData(person, fullDay("2026-04-01", "20:00")), person, "2026-04");
 
@@ -152,6 +180,121 @@ describe("payrollFor", () => {
     expect(pay.otPay).toBe(60);
     expect(pay.gross).toBe(3060);
     expect(pay.warningFlags).toContain("overtime");
+  });
+
+  it("adds short flexible-work days to payroll notes without auto-deducting salary", () => {
+    const person = employee({ shiftId: flexibleShift.id });
+    const shortDay = [
+      punch("in", "10:30"),
+      punch("breakOut", "12:00"),
+      punch("breakIn", "13:00"),
+      punch("out", "18:00"),
+    ];
+    const pay = payrollFor(appData(person, shortDay, [], "2026-04-01", [flexibleShift]), person, "2026-04");
+
+    expect(pay.summary.shortHoursCount).toBe(1);
+    expect(pay.warningFlags).toContain("shortHours");
+    expect(pay.totalDeduct).toBe(0);
+    expect(pay.gross).toBe(3000);
+  });
+
+  it("keeps accepted short-hours days in payroll notes without pending salary impact", () => {
+    const person = employee({ shiftId: flexibleShift.id });
+    const shortDay = [
+      punch("in", "10:30"),
+      punch("breakOut", "12:00"),
+      punch("breakIn", "13:00"),
+      punch("out", "18:00"),
+    ];
+    const acceptedReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "shortHours"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "shortHours",
+      decision: "accepted",
+      note: "HR accepted",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const data = appData(person, shortDay, [], "2026-04-01", [flexibleShift], [acceptedReview]);
+    const pay = payrollFor(data, person, "2026-04");
+
+    expect(pay.summary.shortHoursCount).toBe(0);
+    expect(pay.summary.acceptedShortHoursCount).toBe(1);
+    expect(pay.warningFlags).not.toContain("shortHours");
+    expect(pay.warningFlags).toContain("acceptedShortHours");
+    expect(pay.totalDeduct).toBe(0);
+    expect(pay.gross).toBe(3000);
+  });
+
+  it("deducts reviewed short-hours gaps for monthly staff only", () => {
+    const person = employee({ shiftId: flexibleShift.id });
+    const shortDay = [
+      punch("in", "10:30"),
+      punch("breakOut", "12:00"),
+      punch("breakIn", "13:00"),
+      punch("out", "18:00"),
+    ];
+    const deductedReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "shortHours"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "shortHours",
+      decision: "deducted",
+      note: "Deduct shortage",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const pay = payrollFor(
+      appData(person, shortDay, [], "2026-04-01", [flexibleShift], [deductedReview]),
+      person,
+      "2026-04",
+    );
+
+    expect(pay.summary.shortHoursCount).toBe(0);
+    expect(pay.summary.deductedShortHoursCount).toBe(1);
+    expect(pay.summary.deductedShortHoursMinutes).toBe(90);
+    expect(pay.warningFlags).toContain("deductedShortHours");
+    expect(pay.shortHoursDeduct).toBe(30);
+    expect(pay.totalDeduct).toBe(30);
+    expect(pay.gross).toBe(2970);
+  });
+
+  it("does not double-deduct reviewed short hours for hourly staff", () => {
+    const person = employee({
+      shiftId: flexibleShift.id,
+      salary: {
+        type: "hourly",
+        currency: "MYR",
+        monthlyAmount: 0,
+        hourlyRate: 10,
+        otMultiplier: 1.5,
+        leaveDeductPerDay: 100,
+      },
+    });
+    const shortDay = [
+      punch("in", "10:30"),
+      punch("breakOut", "12:00"),
+      punch("breakIn", "13:00"),
+      punch("out", "18:00"),
+    ];
+    const deductedReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "shortHours"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "shortHours",
+      decision: "deducted",
+      note: "Deduct shortage",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const pay = payrollFor(
+      appData(person, shortDay, [], "2026-04-01", [flexibleShift], [deductedReview]),
+      person,
+      "2026-04",
+    );
+
+    expect(pay.workHours).toBe(6.5);
+    expect(pay.shortHoursDeduct).toBe(0);
+    expect(pay.totalDeduct).toBe(0);
+    expect(pay.gross).toBe(65);
   });
 
   it("pro-rates monthly salary from a mid-month join date", () => {
@@ -172,5 +315,47 @@ describe("getMonthlyReadiness", () => {
     expect(getMonthlyReadiness(appData(person), "2026-04").status).toBe("empty");
     expect(getMonthlyReadiness(appData(person, [punch("in", "09:00")]), "2026-04").missingCount).toBe(1);
     expect(getMonthlyReadiness(appData(person, fullDay()), "2026-04").status).toBe("ready");
+  });
+
+  it("marks short-hours months as pending for HR review", () => {
+    const person = employee({ shiftId: flexibleShift.id });
+    const shortDay = [
+      punch("in", "10:30"),
+      punch("breakOut", "12:00"),
+      punch("breakIn", "13:00"),
+      punch("out", "18:00"),
+    ];
+    const readiness = getMonthlyReadiness(appData(person, shortDay, [], "2026-04-01", [flexibleShift]), "2026-04");
+
+    expect(readiness.shortHoursCount).toBe(1);
+    expect(readiness.unresolvedCount).toBe(1);
+    expect(readiness.status).toBe("pending");
+  });
+
+  it("does not keep accepted short-hours days pending", () => {
+    const person = employee({ shiftId: flexibleShift.id });
+    const shortDay = [
+      punch("in", "10:30"),
+      punch("breakOut", "12:00"),
+      punch("breakIn", "13:00"),
+      punch("out", "18:00"),
+    ];
+    const acceptedReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "shortHours"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "shortHours",
+      decision: "accepted",
+      note: "HR accepted",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const readiness = getMonthlyReadiness(
+      appData(person, shortDay, [], "2026-04-01", [flexibleShift], [acceptedReview]),
+      "2026-04",
+    );
+
+    expect(readiness.shortHoursCount).toBe(0);
+    expect(readiness.unresolvedCount).toBe(0);
+    expect(readiness.status).toBe("ready");
   });
 });

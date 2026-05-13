@@ -29,10 +29,12 @@ html,
 body,
 #root {
   min-height: 100%;
+  max-width: 100%;
 }
 
 body {
   margin: 0;
+  overflow-x: hidden;
   background:
     linear-gradient(90deg, rgba(24, 33, 31, 0.035) 1px, transparent 1px),
     linear-gradient(180deg, rgba(24, 33, 31, 0.035) 1px, transparent 1px),
@@ -157,6 +159,14 @@ button:disabled {
   padding: 12px;
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.1);
+}
+
+.mobile-menu-button {
+  display: none;
+}
+
+.mobile-menu-panel {
+  display: contents;
 }
 
 .workspace {
@@ -1126,7 +1136,12 @@ td.num {
     align-items: stretch;
   }
   .demo-panel-actions {
-    flex-direction: row;
+    flex-direction: column;
+  }
+
+  .demo-panel-actions .button {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -1882,6 +1897,64 @@ input[type="color"] {
 .timecards-status .muted {
   color: var(--muted);
   font-size: 12.5px;
+}
+
+.short-hours-review-box {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid #e5c99c;
+  border-radius: 8px;
+  background: #fff8eb;
+  color: var(--ink);
+}
+
+.short-hours-review-box > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.short-hours-review-box small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.short-hours-review-box-accepted {
+  border-color: rgba(47, 125, 116, 0.35);
+  background: #eef7f2;
+}
+
+.short-hours-review-box-deducted {
+  border-color: #e5c99c;
+  background: #fff4de;
+}
+
+.short-hours-review-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.short-hours-review-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border: 1px solid rgba(47, 125, 116, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.65);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.short-hours-review-options input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--green);
 }
 
 .timecards-punches {
@@ -3254,12 +3327,46 @@ tbody tr:hover {
   }
 
   .rail {
-    position: static;
+    position: sticky;
+    z-index: 20;
     min-height: auto;
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .brand {
+    padding: 0 0 12px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
   }
 
   .nav-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .nav-item {
+    justify-content: center;
+    min-height: 46px;
+    padding: 9px 7px;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  .nav-item svg {
+    flex: 0 0 auto;
+  }
+
+  .nav-item-active {
+    box-shadow: inset 0 -3px 0 #e8b84b;
+  }
+
+  .rail-status {
+    display: none;
   }
 
   .split-layout,
@@ -3279,8 +3386,121 @@ tbody tr:hover {
 }
 
 @media (max-width: 680px) {
+  :root {
+    font-size: 14px;
+  }
+
+  .app-shell {
+    display: block;
+    min-height: 100vh;
+  }
+
+  body {
+    background-size: 22px 22px;
+  }
+
   .workspace {
-    padding: 14px;
+    padding: 12px;
+  }
+
+  .rail {
+    padding: 10px 12px 8px;
+    gap: 8px;
+  }
+
+  .brand {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+  }
+
+  .brand strong {
+    font-size: 15px;
+  }
+
+  .brand span {
+    display: none;
+  }
+
+  .mobile-menu-button {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid rgba(244, 248, 244, 0.18);
+    border-radius: var(--radius);
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #f4f8f4;
+    font-weight: 800;
+  }
+
+  .mobile-menu-panel {
+    display: none;
+    padding-top: 8px;
+    border-top: 1px solid rgba(244, 248, 244, 0.14);
+  }
+
+  .mobile-menu-panel.mobile-menu-open {
+    display: grid;
+    gap: 8px;
+  }
+
+  .nav-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .nav-item {
+    min-height: 38px;
+    padding: 6px 4px;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11px;
+    line-height: 1.1;
+  }
+
+  .nav-item svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .rail-logout {
+    min-height: 38px;
+    margin: 0;
+  }
+
+  .topbar h1 {
+    font-size: 24px;
+  }
+
+  .topbar {
+    margin-bottom: 12px;
+    gap: 10px;
+  }
+
+  .eyebrow {
+    margin-bottom: 2px;
+   }
+
+  .inline-actions,
+  .backup-actions {
+    width: 100%;
+  }
+
+  .inline-actions > *,
+  .backup-actions > * {
+    flex: 1 1 auto;
   }
 
   .metric-grid,
@@ -3296,8 +3516,158 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
-  .nav-list {
+  .panel {
+    padding: 14px;
+  }
+
+  .month-stage-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .month-stage-item {
+    min-height: 48px;
+    padding: 10px;
+  }
+
+  .month-stage-item small,
+  .month-stage-item b {
+    display: none;
+  }
+
+  .timecard-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .timecard-controls,
+  .pagination-bar,
+  .timecards-actions,
+  .detail-back-row,
+  .short-hours-review-box {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .short-hours-review-options {
+    justify-content: stretch;
+  }
+
+  .short-hours-review-options label {
+    flex: 1 1 100%;
+  }
+
+  .table-wrap {
+    border-radius: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 720px;
+  }
+
+  th,
+  td {
+    padding: 9px 10px;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 430px) {
+  .rail {
+    padding: 8px;
+  }
+
+  .brand {
+    padding-bottom: 6px;
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+  }
+
+  .brand strong {
+    font-size: 14px;
+  }
+
+  .mobile-menu-button {
+    min-height: 32px;
+    padding: 5px 8px;
+  }
+
+  .mobile-menu-button span {
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 680px) {
+  .lock-shell {
+    padding: 12px;
+    place-items: center;
+  }
+
+  .lock-lang-pill {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    max-width: calc(100vw - 16px);
+  }
+
+  .lock-card {
+    width: min(440px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    min-width: 0;
+    overflow: hidden;
+    padding: 28px 18px 22px;
+    border-radius: 12px;
+    gap: 14px;
+  }
+
+  .lock-brand-mark {
+    width: 48px;
+    height: 48px;
+    font-size: 26px;
+  }
+
+  .lock-title {
+    font-size: 19px;
+    line-height: 1.25;
+  }
+
+  .lock-tagline {
+    font-size: 12.5px;
+  }
+
+  .lock-form,
+  .lock-form .field,
+  .lock-form input {
+    min-width: 0;
+  }
+
+  .lock-capabilities {
+    justify-content: stretch;
+  }
+
+  .lock-capabilities li {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: center;
+    min-width: 0;
+    text-align: center;
+    white-space: normal;
+    line-height: 1.25;
   }
 }
 
@@ -3445,6 +3815,53 @@ tbody tr:hover {
   color: var(--muted);
   font-size: 11.5px;
   letter-spacing: 0.01em;
+}
+
+@media (max-width: 680px) {
+  .lock-shell {
+    padding: 12px;
+    place-items: center;
+  }
+
+  .lock-lang-pill {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    max-width: calc(100vw - 16px);
+  }
+
+  .lock-card {
+    width: min(440px, calc(100vw - 24px));
+    padding: 28px 18px 22px;
+    border-radius: 12px;
+    gap: 14px;
+  }
+
+  .lock-brand-mark {
+    width: 48px;
+    height: 48px;
+    font-size: 26px;
+  }
+
+  .lock-title {
+    font-size: 19px;
+    line-height: 1.25;
+  }
+
+  .lock-tagline {
+    font-size: 12.5px;
+  }
+
+  .lock-capabilities {
+    justify-content: stretch;
+  }
+
+  .lock-capabilities li {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: center;
+    min-width: 0;
+    text-align: center;
+  }
 }
 
 .rail-logout {
