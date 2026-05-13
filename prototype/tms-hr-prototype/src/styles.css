@@ -29,6 +29,7 @@ html,
 body,
 #root {
   min-height: 100%;
+  width: 100%;
   max-width: 100%;
 }
 
@@ -3390,6 +3391,19 @@ tbody tr:hover {
     font-size: 14px;
   }
 
+  html,
+  body,
+  #root,
+  .app-shell,
+  .rail,
+  .workspace,
+  .view-stack,
+  .panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
   .app-shell {
     display: block;
     min-height: 100vh;
@@ -3401,6 +3415,7 @@ tbody tr:hover {
 
   .workspace {
     padding: 12px;
+    overflow-x: hidden;
   }
 
   .rail {
@@ -3487,6 +3502,7 @@ tbody tr:hover {
   .topbar {
     margin-bottom: 12px;
     gap: 10px;
+    min-width: 0;
   }
 
   .eyebrow {
@@ -3494,13 +3510,48 @@ tbody tr:hover {
    }
 
   .inline-actions,
-  .backup-actions {
+  .backup-actions,
+  .topbar-controls,
+  .section-action,
+  .editor-actions,
+  .add-employee-actions,
+  .pagination-actions {
     width: 100%;
+    min-width: 0;
   }
 
   .inline-actions > *,
-  .backup-actions > * {
+  .backup-actions > *,
+  .topbar-controls > *,
+  .section-action > *,
+  .editor-actions > *,
+  .add-employee-actions > *,
+  .pagination-actions > * {
     flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .section-title,
+  .hr-home-section-head,
+  .payroll-preview-header,
+  .payroll-export-status,
+  .holiday-table-head,
+  .setting-list-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .section-title h2,
+  .hr-home-section-head h2 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .button {
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.2;
   }
 
   .metric-grid,
@@ -3557,7 +3608,9 @@ tbody tr:hover {
   }
 
   .table-wrap {
+    max-width: 100%;
     border-radius: 6px;
+    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -3575,6 +3628,46 @@ tbody tr:hover {
   select,
   textarea {
     min-height: 42px;
+    max-width: 100%;
+  }
+
+  .field-compact,
+  .holiday-table-head .field,
+  .day-controls .field,
+  .time-editor .field,
+  .time-editor .field:nth-last-child(2) {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+
+  .holiday-add-row,
+  .day-controls,
+  .time-editor {
+    align-items: stretch;
+  }
+
+  .setting-list-add {
+    grid-template-columns: 1fr;
+  }
+
+  .pay-rule-toggle {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .holiday-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+  }
+
+  .holiday-row-date,
+  .holiday-row-name {
+    grid-column: 1;
+  }
+
+  .holiday-row-delete {
+    grid-column: 2;
+    grid-row: 1 / 3;
   }
 }
 
