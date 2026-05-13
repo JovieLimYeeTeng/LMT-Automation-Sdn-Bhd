@@ -315,12 +315,28 @@ export function sortByDateTime<T extends { date: string; time?: string }>(items:
   return [...items].sort((a, b) => `${a.date} ${a.time ?? ""}`.localeCompare(`${b.date} ${b.time ?? ""}`));
 }
 
-export function findShiftForPunch(shifts: Shift[], date: string, punchTime: string): Shift | undefined {
+export function normalizeShiftRules(shift: Shift): Shift {
+  if (!shift.flexibleWork || shift.graceMinutes === 0) return shift;
+  return { ...shift, graceMinutes: 0 };
+}
+
+export function isAutoShiftCandidate(shift: Shift, date: string): boolean {
+  const weekday = getWeekday(date);
+  return !shift.flexibleWork && !shift.days[weekday].off;
+}
+
+export function findShiftForPunch(
+  shifts: Shift[],
+  date: string,
+  punchTime: string,
+  options: { includeFlexibleWork?: boolean } = {},
+): Shift | undefined {
   const weekday = getWeekday(date);
   const punchMinutes = minutesFromTime(punchTime);
 
   return [...shifts]
     .filter((shift) => !shift.days[weekday].off)
+    .filter((shift) => options.includeFlexibleWork || !shift.flexibleWork)
     .sort((a, b) => {
       const aStart = minutesFromTime(a.days[weekday].start);
       const bStart = minutesFromTime(b.days[weekday].start);
@@ -335,12 +351,15 @@ export function resolveShiftForEmployee(
   shiftOverrideId?: string,
 ): { shift: Shift | undefined; source: ShiftSource } {
   if (shiftOverrideId) {
-    return { shift: data.shifts.find((item) => item.id === shiftOverrideId), source: "override" };
+    const shift = data.shifts.find((item) => item.id === shiftOverrideId);
+    return { shift: shift && !(employee.autoShift && shift.flexibleWork) ? normalizeShiftRules(shift) : undefined, source: "override" };
   }
   const perDate = employee.shiftOverrides?.[date];
   if (perDate) {
     const shift = data.shifts.find((item) => item.id === perDate);
-    if (shift) return { shift, source: "override" };
+    if (shift) {
+      return { shift: employee.autoShift && shift.flexibleWork ? undefined : normalizeShiftRules(shift), source: "override" };
+    }
   }
   if (employee.autoShift) {
     const firstPunch = sortByDateTime(
@@ -348,10 +367,11 @@ export function resolveShiftForEmployee(
     )[0];
     if (firstPunch) {
       const shift = findShiftForPunch(data.shifts, date, firstPunch.time);
-      if (shift) return { shift, source: "auto" };
+      return { shift: shift ? normalizeShiftRules(shift) : undefined, source: "auto" };
     }
   }
-  return { shift: data.shifts.find((item) => item.id === employee.shiftId), source: "employee" };
+  const defaultShift = data.shifts.find((item) => item.id === employee.shiftId);
+  return { shift: defaultShift ? normalizeShiftRules(defaultShift) : undefined, source: "employee" };
 }
 
 export function effectiveRestDay(employee: Employee, date: string, scheduleOff: boolean): boolean {

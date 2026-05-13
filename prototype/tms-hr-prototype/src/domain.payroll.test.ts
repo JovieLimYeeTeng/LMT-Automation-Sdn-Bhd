@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attendanceReviewId, calculateAttendance, createStandardWeek, getMonthlyReadiness, payrollFor } from "./domain";
+import { attendanceReviewId, calculateAttendance, createStandardWeek, findShiftForPunch, getMonthlyReadiness, normalizeShiftRules, payrollFor } from "./domain";
 import type { AppData, AttendanceReview, Employee, LeaveEntry, Punch, PunchKind, Shift } from "./types";
 
 const shift: Shift = {
@@ -20,6 +20,13 @@ const flexibleShift: Shift = {
   id: "shift-flex",
   name: "Flexible 8h",
   flexibleWork: true,
+};
+
+const graceShift: Shift = {
+  ...shift,
+  id: "shift-grace",
+  name: "Grace",
+  graceMinutes: 10,
 };
 
 const nightShift: Shift = {
@@ -124,6 +131,66 @@ function appData(
     },
   };
 }
+
+describe("attendance rule validation", () => {
+  it("normalizes W+G by clearing grace minutes on flexible-work shifts", () => {
+    const invalidFlexibleShift = { ...flexibleShift, graceMinutes: 15 };
+
+    expect(normalizeShiftRules(invalidFlexibleShift).graceMinutes).toBe(0);
+  });
+
+  it("does not select flexible-work shifts for auto shift", () => {
+    const flexibleNearPunch = {
+      ...flexibleShift,
+      days: createStandardWeek("08:56", "12:00", "13:00", "17:56", "17:56", [0, 6]),
+    };
+
+    expect(findShiftForPunch([flexibleNearPunch, shift], "2026-04-01", "08:56")?.id).toBe(shift.id);
+  });
+
+  it("defends historical A+W data as no-shift instead of present", () => {
+    const person = employee({ autoShift: true, shiftId: flexibleShift.id });
+    const record = calculateAttendance(
+      appData(person, fullDay(), [], "2026-04-01", [flexibleShift]),
+      person,
+      "2026-04-01",
+    );
+
+    expect(record.status).toBe("incomplete");
+    expect(record.flags).toContainEqual({ kind: "noShift" });
+    expect(record.workMinutes).toBe(0);
+  });
+
+  it("keeps A+L+G legal with grace and flexible lunch", () => {
+    const person = employee({ autoShift: true, shiftId: graceShift.id });
+    const punches = [
+      punch("in", "09:05"),
+      punch("breakOut", "12:00"),
+      punch("breakIn", "13:20"),
+      punch("out", "18:20"),
+    ];
+    const record = calculateAttendance(appData(person, punches, [], "2026-04-01", [graceShift]), person, "2026-04-01");
+
+    expect(record.shiftSource).toBe("auto");
+    expect(record.shift?.id).toBe(graceShift.id);
+    expect(record.lateMinutes).toBe(0);
+    expect(record.flags).toContainEqual({ kind: "lunchOver", minutes: 20 });
+  });
+
+  it("keeps W+L legal and still flags short flexible-work days", () => {
+    const person = employee({ shiftId: flexibleShift.id });
+    const shortDay = [
+      punch("in", "10:30"),
+      punch("breakOut", "12:00"),
+      punch("breakIn", "13:00"),
+      punch("out", "18:00"),
+    ];
+    const record = calculateAttendance(appData(person, shortDay, [], "2026-04-01", [flexibleShift]), person, "2026-04-01");
+
+    expect(record.shift?.flexibleWork).toBe(true);
+    expect(record.flags).toContainEqual({ kind: "underWork", hours: 8 });
+  });
+});
 
 describe("payrollFor", () => {
   it("keeps monthly salary whole when attendance is complete", () => {

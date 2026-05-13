@@ -49,10 +49,12 @@ import {
   getMonthlyReadiness,
   getRecordsForMonth,
   getWeekday,
+  isAutoShiftCandidate,
   isPaidLeaveType,
   makePunchId,
   monthDates,
   minutesFromTime,
+  normalizeShiftRules,
   parsePunchKind,
   payrollFor,
   punchDateForAttendanceTime,
@@ -160,10 +162,10 @@ function hydrateEmployee(raw: Employee): Employee {
 }
 
 function hydrateShift(raw: Shift): Shift {
-  return {
+  return normalizeShiftRules({
     ...raw,
     name: normalizeDataValue(raw.name),
-  };
+  });
 }
 
 function hydrateLeave(raw: LeaveEntry): LeaveEntry {
@@ -720,7 +722,7 @@ function App() {
   function patchShift(id: string, patch: Partial<Shift>) {
     setData((current) => ({
       ...current,
-      shifts: current.shifts.map((shift) => (shift.id === id ? { ...shift, ...patch } : shift)),
+      shifts: current.shifts.map((shift) => (shift.id === id ? normalizeShiftRules({ ...shift, ...patch }) : shift)),
     }));
   }
 
@@ -827,6 +829,8 @@ function App() {
       ...current,
       employees: current.employees.map((employee) => {
         if (employee.id !== employeeId) return employee;
+        const requestedShift = shiftId ? current.shifts.find((shift) => shift.id === shiftId) : undefined;
+        if (employee.autoShift && requestedShift?.flexibleWork) return employee;
         const next = { ...employee.shiftOverrides };
         if (shiftId) next[date] = shiftId;
         else delete next[date];
@@ -2132,14 +2136,30 @@ function App() {
             <div className="form-grid three">
               <Field label={t("shiftLabel")}>
                 <select value={selectedEmployee.shiftId} onChange={(event) => patchEmployee(selectedEmployee.id, { shiftId: event.target.value })}>
-                  {data.shifts.map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
+                  {data.shifts
+                    .filter((shift) => !selectedEmployee.autoShift || !shift.flexibleWork)
+                    .map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
                 </select>
               </Field>
               <label className="toggle-line">
                 <input
                   type="checkbox"
                   checked={selectedEmployee.autoShift}
-                  onChange={(event) => patchEmployee(selectedEmployee.id, { autoShift: event.target.checked })}
+                  onChange={(event) => {
+                    const autoShift = event.target.checked;
+                    const currentShift = data.shifts.find((shift) => shift.id === selectedEmployee.shiftId);
+                    const firstFixedShift = data.shifts.find((shift) => !shift.flexibleWork);
+                    const shiftOverrides = autoShift
+                      ? Object.fromEntries(
+                          Object.entries(selectedEmployee.shiftOverrides).filter(([, shiftId]) => !data.shifts.find((shift) => shift.id === shiftId)?.flexibleWork),
+                        )
+                      : selectedEmployee.shiftOverrides;
+                    patchEmployee(selectedEmployee.id, {
+                      autoShift,
+                      shiftId: autoShift && currentShift?.flexibleWork && firstFixedShift ? firstFixedShift.id : selectedEmployee.shiftId,
+                      shiftOverrides,
+                    });
+                  }}
                 />
                 <span>{t("autoShiftLabel")}</span>
               </label>
@@ -2486,7 +2506,14 @@ function App() {
               <input type="number" min="1" step="0.5" value={selectedShift.workLengthHours} onChange={(event) => patchShift(selectedShift.id, { workLengthHours: Number(event.target.value) })} />
             </Field>
             <Field label={t("shiftGraceLabel")}>
-              <input type="number" min="0" value={selectedShift.graceMinutes} onChange={(event) => patchShift(selectedShift.id, { graceMinutes: Number(event.target.value) })} />
+              <input
+                type="number"
+                min="0"
+                value={selectedShift.graceMinutes}
+                disabled={selectedShift.flexibleWork}
+                onChange={(event) => patchShift(selectedShift.id, { graceMinutes: Number(event.target.value) })}
+              />
+              {selectedShift.flexibleWork ? <small className="field-help">{t("shiftGraceDisabledForFlexible")}</small> : null}
             </Field>
             <label className="toggle-line">
               <input type="checkbox" checked={selectedShift.flexibleWork} onChange={(event) => patchShift(selectedShift.id, { flexibleWork: event.target.checked })} />
@@ -2550,7 +2577,7 @@ function App() {
           {(() => {
             const weekday = getWeekday(selectedDate);
             const candidates = data.shifts
-              .filter((s) => !s.days[weekday].off)
+              .filter((shift) => isAutoShiftCandidate(shift, selectedDate))
               .map((s) => {
                 const startStr = s.days[weekday].start;
                 const startMin = minutesFromTime(startStr);
@@ -2566,10 +2593,8 @@ function App() {
             const grace = winner?.graceMinutes ?? 0;
             const lateAfterGrace = Math.max(0, lateRaw - grace);
             const verdict = !winner
-              ? t("autoShiftSimVerdictNoShift")
-              : winner.flexibleWork
-                ? t("autoShiftSimVerdictFlex")
-                : lateRaw === 0
+              ? t("autoShiftSimVerdictNoFixedShift")
+              : lateRaw === 0
                   ? t("autoShiftSimVerdictOnTime")
                   : lateAfterGrace === 0
                     ? t("autoShiftSimVerdictWithinGrace", { lateRaw, grace })
@@ -2604,7 +2629,7 @@ function App() {
                   </div>
                   <div>
                     <span className="mini-label">{t("autoShiftSimVerdictLabel")}</span>
-                    <strong className={cx(lateAfterGrace > 0 && !winner?.flexibleWork ? "auto-shift-sim-bad" : "auto-shift-sim-good")}>
+                    <strong className={cx(!winner || lateAfterGrace > 0 ? "auto-shift-sim-bad" : "auto-shift-sim-good")}>
                       {verdict}
                     </strong>
                   </div>
@@ -2928,9 +2953,11 @@ function App() {
                       ? t("autoShiftPlaceholder")
                       : `${t("defaultShiftPrefix")}${translateDataValue(data.shifts.find((shift) => shift.id === selectedEmployee.shiftId)?.name ?? "-", lang)}`}
                   </option>
-                  {data.shifts.map((shift) => (
-                    <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>
-                  ))}
+                  {data.shifts
+                    .filter((shift) => !selectedEmployee.autoShift || !shift.flexibleWork)
+                    .map((shift) => (
+                      <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>
+                    ))}
                 </select>
               </Field>
               <Field label={t("dayRestSelectLabel")} compact>
