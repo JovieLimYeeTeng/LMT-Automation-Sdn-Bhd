@@ -651,6 +651,8 @@ function App() {
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [employeeFilters, setEmployeeFilters] = useState({ ...defaultEmployeeFilters });
   const [bulkSelectedEmployeeIds, setBulkSelectedEmployeeIds] = useState<string[]>([]);
+  const [advancedEmployeeFiltersOpen, setAdvancedEmployeeFiltersOpen] = useState(false);
+  const [bulkSetupOpen, setBulkSetupOpen] = useState(false);
   const [bulkConditionDraft, setBulkConditionDraft] = useState({
     workMode: "fixed" as ConditionWorkMode,
     shiftId: data.shifts[0]?.id ?? "",
@@ -1642,16 +1644,15 @@ function App() {
       { title: t("hrHomeLeaveTitle"), hint: t("hrHomeLeaveHint"), icon: CalendarDays, onClick: () => openThisMonth("leave") },
       { title: t("hrHomeReportsTitle"), hint: t("hrHomeReportsHint"), icon: FileSpreadsheet, onClick: () => openReports("summary") },
       { title: t("hrHomePayrollTitle"), hint: t("hrHomePayrollHint"), icon: Wallet, onClick: () => openThisMonth("payroll"), primary: monthlyReadiness.status === "ready" },
-      { title: t("hrHomeEmployeeTitle"), hint: t("hrHomeEmployeeHint"), icon: Users, onClick: () => setActiveView("employees") },
     ];
-    const requirementItems: Array<{ label: string; icon: LucideIcon; onClick: () => void }> = [
-      { label: t("reqEmployeeData"), icon: Users, onClick: () => setActiveView("employees") },
-      { label: t("reqShiftSetup"), icon: CalendarClock, onClick: () => { setSettingsTab("shifts"); setActiveView("settings"); } },
-      { label: t("reqCommonSettings"), icon: Settings2, onClick: () => { setSettingsTab("lists"); setActiveView("settings"); } },
-      { label: t("reqPunchCorrection"), icon: Wand2, onClick: () => openTimecards("all") },
-      { label: t("reqReports"), icon: FileSpreadsheet, onClick: () => openReports("summary") },
-      { label: t("reqDeviceImport"), icon: Fingerprint, onClick: () => openThisMonth("import") },
-      { label: t("reqPermission"), icon: LockKeyhole, onClick: () => { setSettingsTab("permissions"); setActiveView("settings"); } },
+    const requirementItems: Array<{ label: string; icon: LucideIcon }> = [
+      { label: t("reqEmployeeData"), icon: Users },
+      { label: t("reqShiftSetup"), icon: CalendarClock },
+      { label: t("reqCommonSettings"), icon: Settings2 },
+      { label: t("reqPunchCorrection"), icon: Wand2 },
+      { label: t("reqReports"), icon: FileSpreadsheet },
+      { label: t("reqDeviceImport"), icon: Fingerprint },
+      { label: t("reqPermission"), icon: LockKeyhole },
     ];
 
     if (monthStage === "home") {
@@ -1726,10 +1727,10 @@ function App() {
               {requirementItems.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <button key={item.label} type="button" className="requirement-pill" onClick={item.onClick}>
+                  <div key={item.label} className="requirement-pill">
                     <Icon size={15} aria-hidden="true" />
                     <span>{item.label}</span>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -1934,29 +1935,6 @@ function App() {
           </div>
         </section>
 
-        {monthPunches.length > 0 ? (
-          <section className="panel sample-report-panel">
-            <SectionTitle
-              title={t("demoReportJumpTitle")}
-              action={<span className="hint">{t("demoReportJumpHint")}</span>}
-            />
-            <div className="sample-report-grid">
-              {[
-                { id: "summary" as ReportId, label: t("reportSummary"), hint: t("reportPurposeCompany") },
-                { id: "punchGrid" as ReportId, label: t("reportPunchGrid"), hint: t("reportPurposeAudit") },
-                { id: "personal" as ReportId, label: t("reportPersonal"), hint: t("reportPurposeEmployeePrint") },
-                { id: "raw" as ReportId, label: t("reportRaw"), hint: t("reportPurposeRawAudit") },
-              ].map((item) => (
-                <button key={item.id} type="button" onClick={() => openReports(item.id)}>
-                  <FileSpreadsheet size={16} aria-hidden="true" />
-                  <span>{item.label}</span>
-                  <small>{item.hint}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
         <section className="panel">
           <SectionTitle
             title={t("pureSoftware")}
@@ -1974,7 +1952,6 @@ function App() {
                   }}
                 />
                 <Button icon={Upload} onClick={() => fileInputRef.current?.click()}>{t("importCsv")}</Button>
-                <Button icon={Wand2} variant="secondary" onClick={() => openTimecards("all")}>{t("openTimecards")}</Button>
               </div>
             }
           />
@@ -2044,7 +2021,6 @@ function App() {
         <section className="panel">
           <SectionTitle
             title={t("postImportCheck")}
-            action={<Button icon={FileSpreadsheet} variant="secondary" onClick={() => openReports("summary")}>{t("seeReports")}</Button>}
           />
           <div className="table-wrap">
             <table>
@@ -2171,9 +2147,14 @@ function App() {
                 <strong>{t("employeeFilterTitle")}</strong>
                 <span>{t("employeeFilterResult", { count: visibleEmployees.length })}</span>
               </div>
-              <Button icon={RefreshCcw} variant="ghost" onClick={clearEmployeeFilters}>{t("clearFilters")}</Button>
+              <div className="inline-actions">
+                <Button icon={ListFilter} variant="ghost" onClick={() => setAdvancedEmployeeFiltersOpen((open) => !open)}>
+                  {advancedEmployeeFiltersOpen ? t("hideAdvancedFilters") : t("showAdvancedFilters")}
+                </Button>
+                <Button icon={RefreshCcw} variant="ghost" onClick={clearEmployeeFilters}>{t("clearFilters")}</Button>
+              </div>
             </div>
-            <div className="employee-filter-grid">
+            <div className="employee-filter-grid employee-filter-grid-quick">
               <Field label={t("employeeFilterSearch")} compact>
                 <div className="list-search">
                   <ListFilter size={16} aria-hidden="true" />
@@ -2203,39 +2184,46 @@ function App() {
                   {data.settings.departments.map((department) => <option key={department} value={department}>{translateDataValue(department, lang)}</option>)}
                 </select>
               </Field>
-              <Field label={t("positionLabel")} compact>
-                <select value={employeeFilters.position} onChange={(event) => setEmployeeFilters((current) => ({ ...current, position: event.target.value }))}>
-                  <option value="all">{t("all")}</option>
-                  {data.settings.positions.map((position) => <option key={position} value={position}>{translateDataValue(position, lang)}</option>)}
-                </select>
-              </Field>
-              <Field label={t("shiftLabel")} compact>
-                <select value={employeeFilters.shiftId} onChange={(event) => setEmployeeFilters((current) => ({ ...current, shiftId: event.target.value }))}>
-                  <option value="all">{t("all")}</option>
-                  {data.shifts.map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
-                </select>
-              </Field>
-              <Field label={t("employeeNoFromLabel")} compact>
-                <input value={employeeFilters.enrollFrom} onChange={(event) => setEmployeeFilters((current) => ({ ...current, enrollFrom: event.target.value }))} />
-              </Field>
-              <Field label={t("employeeNoToLabel")} compact>
-                <input value={employeeFilters.enrollTo} onChange={(event) => setEmployeeFilters((current) => ({ ...current, enrollTo: event.target.value }))} />
-              </Field>
-              <Field label={t("birthDateFromLabel")} compact>
-                <input type="date" value={employeeFilters.birthFrom} onChange={(event) => setEmployeeFilters((current) => ({ ...current, birthFrom: event.target.value }))} />
-              </Field>
-              <Field label={t("birthDateToLabel")} compact>
-                <input type="date" value={employeeFilters.birthTo} onChange={(event) => setEmployeeFilters((current) => ({ ...current, birthTo: event.target.value }))} />
-              </Field>
             </div>
+            {advancedEmployeeFiltersOpen ? (
+              <div className="employee-filter-grid employee-filter-grid-advanced">
+                <Field label={t("positionLabel")} compact>
+                  <select value={employeeFilters.position} onChange={(event) => setEmployeeFilters((current) => ({ ...current, position: event.target.value }))}>
+                    <option value="all">{t("all")}</option>
+                    {data.settings.positions.map((position) => <option key={position} value={position}>{translateDataValue(position, lang)}</option>)}
+                  </select>
+                </Field>
+                <Field label={t("shiftLabel")} compact>
+                  <select value={employeeFilters.shiftId} onChange={(event) => setEmployeeFilters((current) => ({ ...current, shiftId: event.target.value }))}>
+                    <option value="all">{t("all")}</option>
+                    {data.shifts.map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
+                  </select>
+                </Field>
+                <Field label={t("employeeNoFromLabel")} compact>
+                  <input value={employeeFilters.enrollFrom} onChange={(event) => setEmployeeFilters((current) => ({ ...current, enrollFrom: event.target.value }))} />
+                </Field>
+                <Field label={t("employeeNoToLabel")} compact>
+                  <input value={employeeFilters.enrollTo} onChange={(event) => setEmployeeFilters((current) => ({ ...current, enrollTo: event.target.value }))} />
+                </Field>
+                <Field label={t("birthDateFromLabel")} compact>
+                  <input type="date" value={employeeFilters.birthFrom} onChange={(event) => setEmployeeFilters((current) => ({ ...current, birthFrom: event.target.value }))} />
+                </Field>
+                <Field label={t("birthDateToLabel")} compact>
+                  <input type="date" value={employeeFilters.birthTo} onChange={(event) => setEmployeeFilters((current) => ({ ...current, birthTo: event.target.value }))} />
+                </Field>
+              </div>
+            ) : null}
           </div>
-          <div className="bulk-condition-panel" aria-label={t("bulkConditionsTitle")}>
+          <div className={cx("bulk-condition-panel", !bulkSetupOpen && bulkSelectedEmployeeIds.length === 0 && "bulk-condition-panel-collapsed")} aria-label={t("bulkConditionsTitle")}>
             <div className="bulk-condition-head">
               <div>
                 <strong>{t("bulkConditionsTitle")}</strong>
                 <span>{t("bulkSelectedCount", { count: bulkSelectedEmployeeIds.length })}</span>
               </div>
               <div className="inline-actions">
+                <Button icon={Settings2} variant="ghost" onClick={() => setBulkSetupOpen((open) => !open)}>
+                  {bulkSetupOpen || bulkSelectedEmployeeIds.length > 0 ? t("hideBulkSetup") : t("showBulkSetup")}
+                </Button>
                 <Button
                   icon={CheckCircle2}
                   variant="secondary"
@@ -2253,86 +2241,90 @@ function App() {
                 </Button>
               </div>
             </div>
-            <div className="bulk-condition-grid">
-              <Field label={t("bulkWorkModeLabel")} compact>
-                <select
-                  value={bulkConditionDraft.workMode}
-                  onChange={(event) => setBulkConditionDraft((current) => ({
-                    ...current,
-                    workMode: event.target.value as ConditionWorkMode,
-                  }))}
-                >
-                  <option value="fixed">{t("workModeFixed")}</option>
-                  <option value="auto">{t("workModeAuto")}</option>
-                  <option value="flexible">{t("workModeFlexible")}</option>
-                </select>
-              </Field>
-              <Field label={t("shiftLabel")} compact>
-                <select
-                  value={bulkConditionDraft.shiftId}
-                  onChange={(event) => setBulkConditionDraft((current) => ({ ...current, shiftId: event.target.value }))}
-                >
-                  {data.shifts.map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
-                </select>
-              </Field>
-              <Field label={t("employeeWorkLengthLabel")} compact>
-                <input
-                  type="number"
-                  min="1"
-                  step="0.5"
-                  value={bulkConditionDraft.workLengthHours}
-                  disabled={bulkConditionDraft.workMode !== "flexible"}
-                  onChange={(event) => setBulkConditionDraft((current) => ({ ...current, workLengthHours: Number(event.target.value) }))}
-                />
-              </Field>
-              <Field label={t("employeeGraceMinutesLabel")} compact>
-                <input
-                  type="number"
-                  min="0"
-                  step="5"
-                  value={bulkConditionDraft.graceMinutes}
-                  onChange={(event) => setBulkConditionDraft((current) => ({ ...current, graceMinutes: Number(event.target.value) }))}
-                />
-              </Field>
-              <label className="toggle-line">
-                <input
-                  type="checkbox"
-                  checked={bulkConditionDraft.flexibleLunch}
-                  onChange={(event) => setBulkConditionDraft((current) => ({ ...current, flexibleLunch: event.target.checked }))}
-                />
-                <span>{t("employeeFlexibleLunchToggle")}</span>
-              </label>
-              <Field label={t("employeeLunchMinutesLabel")} compact>
-                <input
-                  type="number"
-                  min="0"
-                  step="5"
-                  value={bulkConditionDraft.lunchMinutes}
-                  disabled={!bulkConditionDraft.flexibleLunch}
-                  onChange={(event) => setBulkConditionDraft((current) => ({ ...current, lunchMinutes: Number(event.target.value) }))}
-                />
-              </Field>
-            </div>
-            <div className="bulk-waiver-row" role="group" aria-label={t("bulkWaiverLabel")}>
-              {[
-                ["late", t("exemptLate")],
-                ["early", t("exemptEarly")],
-                ["lunchPunch", t("exemptLunchPunch")],
-                ["overtime", t("exemptOvertime")],
-              ].map(([key, label]) => (
-                <label className="check-chip" key={key}>
-                  <input
-                    type="checkbox"
-                    checked={bulkConditionDraft.exemptions[key as keyof Employee["exemptions"]]}
-                    onChange={(event) => setBulkConditionDraft((current) => ({
-                      ...current,
-                      exemptions: { ...current.exemptions, [key]: event.target.checked },
-                    }))}
-                  />
-                  <span>{label}</span>
-                </label>
-              ))}
-            </div>
+            {bulkSetupOpen || bulkSelectedEmployeeIds.length > 0 ? (
+              <>
+                <div className="bulk-condition-grid">
+                  <Field label={t("bulkWorkModeLabel")} compact>
+                    <select
+                      value={bulkConditionDraft.workMode}
+                      onChange={(event) => setBulkConditionDraft((current) => ({
+                        ...current,
+                        workMode: event.target.value as ConditionWorkMode,
+                      }))}
+                    >
+                      <option value="fixed">{t("workModeFixed")}</option>
+                      <option value="auto">{t("workModeAuto")}</option>
+                      <option value="flexible">{t("workModeFlexible")}</option>
+                    </select>
+                  </Field>
+                  <Field label={t("shiftLabel")} compact>
+                    <select
+                      value={bulkConditionDraft.shiftId}
+                      onChange={(event) => setBulkConditionDraft((current) => ({ ...current, shiftId: event.target.value }))}
+                    >
+                      {data.shifts.map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
+                    </select>
+                  </Field>
+                  <Field label={t("employeeWorkLengthLabel")} compact>
+                    <input
+                      type="number"
+                      min="1"
+                      step="0.5"
+                      value={bulkConditionDraft.workLengthHours}
+                      disabled={bulkConditionDraft.workMode !== "flexible"}
+                      onChange={(event) => setBulkConditionDraft((current) => ({ ...current, workLengthHours: Number(event.target.value) }))}
+                    />
+                  </Field>
+                  <Field label={t("employeeGraceMinutesLabel")} compact>
+                    <input
+                      type="number"
+                      min="0"
+                      step="5"
+                      value={bulkConditionDraft.graceMinutes}
+                      onChange={(event) => setBulkConditionDraft((current) => ({ ...current, graceMinutes: Number(event.target.value) }))}
+                    />
+                  </Field>
+                  <label className="toggle-line">
+                    <input
+                      type="checkbox"
+                      checked={bulkConditionDraft.flexibleLunch}
+                      onChange={(event) => setBulkConditionDraft((current) => ({ ...current, flexibleLunch: event.target.checked }))}
+                    />
+                    <span>{t("employeeFlexibleLunchToggle")}</span>
+                  </label>
+                  <Field label={t("employeeLunchMinutesLabel")} compact>
+                    <input
+                      type="number"
+                      min="0"
+                      step="5"
+                      value={bulkConditionDraft.lunchMinutes}
+                      disabled={!bulkConditionDraft.flexibleLunch}
+                      onChange={(event) => setBulkConditionDraft((current) => ({ ...current, lunchMinutes: Number(event.target.value) }))}
+                    />
+                  </Field>
+                </div>
+                <div className="bulk-waiver-row" role="group" aria-label={t("bulkWaiverLabel")}>
+                  {[
+                    ["late", t("exemptLate")],
+                    ["early", t("exemptEarly")],
+                    ["lunchPunch", t("exemptLunchPunch")],
+                    ["overtime", t("exemptOvertime")],
+                  ].map(([key, label]) => (
+                    <label className="check-chip" key={key}>
+                      <input
+                        type="checkbox"
+                        checked={bulkConditionDraft.exemptions[key as keyof Employee["exemptions"]]}
+                        onChange={(event) => setBulkConditionDraft((current) => ({
+                          ...current,
+                          exemptions: { ...current.exemptions, [key]: event.target.checked },
+                        }))}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </div>
           {addEmployeeOpen ? (
             <form
@@ -2788,6 +2780,7 @@ function App() {
               }
             />
             <p className="panel-caption">{t("employeeWarningsCaption")}</p>
+            <p className="panel-caption muted">{t("employeeWarningsReadOnlyHint")}</p>
             <div className="employee-warning-summary">
               {[
                 { label: t("metricMissingPunch"), value: employeeWarningCounts.missing, tone: "warn" },
@@ -2814,7 +2807,6 @@ function App() {
                     <th>{t("colIn")}</th>
                     <th>{t("colOut")}</th>
                     <th>{t("colHours")}</th>
-                    <th>{t("colAction")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2826,15 +2818,10 @@ function App() {
                       <td>{recordPunchTime(record, "in", lang) || "-"}</td>
                       <td>{recordPunchTime(record, "out", lang) || "-"}</td>
                       <td>{formatHours(record.workMinutes)}</td>
-                      <td>
-                        <Button icon={Wand2} variant="secondary" onClick={() => openTimecardDetail(record.employee.id, record.date)}>
-                          {t("employeeWarningsFix")}
-                        </Button>
-                      </td>
                     </tr>
                   ))}
                   {employeeWarningRecords.length === 0 ? (
-                    <tr><td colSpan={7} className="empty-cell">{monthlyReadiness.hasOperationalData ? t("employeeWarningsEmpty") : t("employeeWarningsNoData")}</td></tr>
+                    <tr><td colSpan={6} className="empty-cell">{monthlyReadiness.hasOperationalData ? t("employeeWarningsEmpty") : t("employeeWarningsNoData")}</td></tr>
                   ) : null}
                 </tbody>
               </table>
@@ -3138,15 +3125,12 @@ function App() {
     const selectedTimecardAudits = (data.timecardCorrectionAudits ?? [])
       .filter((audit) => audit.employeeId === selectedEmployeeId && audit.date === selectedDate)
       .sort((a, b) => b.changedAt.localeCompare(a.changedAt));
-    const reviewedItems = (data.attendanceReviews ?? [])
-      .filter((review) => review.date.startsWith(selectedMonth))
-      .map((review) => {
-        const employee = data.employees.find((item) => item.id === review.employeeId);
-        const record = employee ? calculateAttendance(data, employee, review.date) : undefined;
-        return { review, employee, record };
-      })
-      .filter((item): item is { review: NonNullable<AppData["attendanceReviews"]>[number]; employee: Employee; record: AttendanceRecord } => Boolean(item.employee && item.record))
-      .sort((a, b) => `${b.review.updatedAt}${b.review.employeeId}`.localeCompare(`${a.review.updatedAt}${a.review.employeeId}`));
+    const recentCorrections = (data.timecardCorrectionAudits ?? [])
+      .filter((audit) => audit.date.startsWith(selectedMonth))
+      .map((audit) => ({ audit, employee: data.employees.find((item) => item.id === audit.employeeId) }))
+      .filter((item): item is { audit: TimecardCorrectionAudit; employee: Employee } => Boolean(item.employee))
+      .sort((a, b) => `${b.audit.changedAt}${b.audit.employeeId}`.localeCompare(`${a.audit.changedAt}${a.audit.employeeId}`))
+      .slice(0, 6);
 
     if (!timecardDetailOpen) {
       const statCards: Array<{ id: TimecardStatusFilter; label: string; value: number; tone: "neutral" | "warn" | "bad" | "good"; icon: LucideIcon }> = [
@@ -3197,37 +3181,37 @@ function App() {
             })}
           </div>
 
-          <section className="panel reviewed-records-panel">
+          <section className="panel reviewed-records-panel recent-corrections-panel">
             <SectionTitle
-              title={t("reviewedRecordsTitle")}
-              action={<span className="setting-list-count">{t("reviewedRecordsCount", { count: reviewedItems.length })}</span>}
+              title={t("recentCorrectionsTitle")}
+              action={<span className="setting-list-count">{t("reviewedRecordsCount", { count: recentCorrections.length })}</span>}
             />
-            <p className="panel-caption">{t("reviewedRecordsCaption")}</p>
+            <p className="panel-caption">{t("recentCorrectionsCaption")}</p>
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
                     <th>{t("colDate")}</th>
                     <th>{t("colEmployee")}</th>
-                    <th>{t("reviewDecisionLabel")}</th>
+                    <th>{t("timecardAuditAction")}</th>
                     <th>{t("colNotes")}</th>
                     <th>{t("actions")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {reviewedItems.map(({ review, employee, record }) => (
-                    <tr key={review.id}>
-                      <td>{review.date}</td>
+                  {recentCorrections.map(({ audit, employee }) => (
+                    <tr key={audit.id}>
+                      <td>{audit.date}</td>
                       <td>{employee.enrollNo} · {displayEmployeeName(employee)}</td>
-                      <td><span className="mini-pill mini-pill-muted">{review.decision === "deducted" ? t("reviewDecisionDeduct") : t("reviewDecisionAccept")}</span></td>
-                      <td>{review.note ? translateDataValue(review.note, lang) : formatFlags(record.flags, lang)}</td>
+                      <td><span className="mini-pill mini-pill-muted">{audit.action === "clear" ? t("timecardAuditActionClear") : t("timecardAuditActionSave")}</span></td>
+                      <td>{displayCorrectionReason(audit.reason, lang)}</td>
                       <td>
                         <Button
                           icon={Wand2}
                           variant="secondary"
                           onClick={() => {
                             setSelectedEmployeeId(employee.id);
-                            setSelectedDate(review.date);
+                            setSelectedDate(audit.date);
                             setTimecardDetailOpen(true);
                           }}
                         >
@@ -3236,8 +3220,8 @@ function App() {
                       </td>
                     </tr>
                   ))}
-                  {reviewedItems.length === 0 ? (
-                    <tr><td colSpan={5} className="empty-cell">{t("reviewedRecordsEmpty")}</td></tr>
+                  {recentCorrections.length === 0 ? (
+                    <tr><td colSpan={5} className="empty-cell">{t("recentCorrectionsEmpty")}</td></tr>
                   ) : null}
                 </tbody>
               </table>
@@ -3705,12 +3689,31 @@ function App() {
     const reportEmployee = activeReportEmployeeId === "all"
       ? undefined
       : data.employees.find((employee) => employee.id === activeReportEmployeeId);
-    const requiredReportCards: Array<{ id: ReportId; title: string; hint: string; purpose: string }> = [
-      { id: "summary", title: t("reportSummary"), hint: t("reportSummaryHint"), purpose: t("reportPurposeCompany") },
-      { id: "punchGrid", title: t("reportPunchGrid"), hint: t("reportPunchGridHint"), purpose: t("reportPurposeAudit") },
-      { id: "personal", title: t("reportPersonal"), hint: t("reportPersonalHint"), purpose: t("reportPurposeEmployeePrint") },
-      { id: "raw", title: t("reportRaw"), hint: t("reportRawHint"), purpose: t("reportPurposeRawAudit") },
-    ];
+    const reportCardHint = (id: ReportId) => {
+      switch (id) {
+        case "summary": return t("reportSummaryHint");
+        case "punchGrid": return t("reportPunchGridHint");
+        case "personal": return t("reportPersonalHint");
+        case "raw": return t("reportRawHint");
+        case "lateEarly": return t("reportLateEarlyHint");
+        case "leave": return t("reportLeaveHint");
+        case "overtime": return t("reportOvertimeHint");
+        case "absent": return t("reportAbsentHint");
+        default: return "";
+      }
+    };
+    const reportCardPurpose = (id: ReportId) => {
+      if (id === "summary") return t("reportPurposeCompany");
+      if (id === "personal") return t("reportPurposeEmployeePrint");
+      if (id === "raw") return t("reportPurposeRawAudit");
+      return t("reportPurposeAudit");
+    };
+    const requiredReportCards: Array<{ id: ReportId; title: string; hint: string; purpose: string }> = reportOptions.map((option) => ({
+      id: option.id,
+      title: option.label[lang],
+      hint: reportCardHint(option.id),
+      purpose: reportCardPurpose(option.id),
+    }));
 
     return (
       <div className="view-stack">
@@ -3749,11 +3752,6 @@ function App() {
             ))}
           </div>
           <div className="toolbar reports-toolbar">
-            <Field label={t("reportLabel")} compact>
-              <select value={reportType} onChange={(event) => setReportType(event.target.value as ReportId)}>
-                {reportOptions.map((option) => <option key={option.id} value={option.id}>{option.label[lang]}</option>)}
-              </select>
-            </Field>
             <Field label={t("companyLabel")} compact>
               <select value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)}>
                 <option value="all">{t("allCompanies")}</option>
@@ -3969,32 +3967,32 @@ function App() {
           </div>
           <div className="table-wrap report-table">
             <p className="table-help">{t("payrollClickEmployeeHint")}</p>
-            <table>
+            <table className="payroll-table">
               <thead>
                 <tr>
-                  <th>{t("payrollColEnrollNo")}</th>
-                  <th>{t("payrollColName")}</th>
-                  <th>{t("payrollColDept")}</th>
-                  <th>{t("payrollColType")}</th>
-                  <th className="num">{t("payrollColWorkHours")}</th>
-                  <th className="num">{t("payrollColPaidLeaveHours")}</th>
-                  <th className="num">{t("payrollColOtHours")}</th>
-                  <th className="num">{t("payrollColLeaveDays")}</th>
-                  <th className="num">{t("payrollColAbsentDays")}</th>
-                  <th className="num">{t("payrollColUnpaidLeaveDays")}</th>
-                  <th>{t("payrollColOtWarning")}</th>
-                  <th className="num">{t("payrollColBase")}</th>
-                  <th className="num">{t("payrollColOtPay")}</th>
-                  <th className="num">{t("payrollColShortHoursDeduct")}</th>
-                  <th className="num">{t("payrollColTotalDeduct")}</th>
-                  <th className="num">{t("payrollColGross")}</th>
+                  <th className="payroll-sticky payroll-group-info">{t("payrollColEnrollNo")}</th>
+                  <th className="payroll-sticky payroll-sticky-name payroll-group-info">{t("payrollColName")}</th>
+                  <th className="payroll-group-info">{t("payrollColDept")}</th>
+                  <th className="payroll-group-info">{t("payrollColType")}</th>
+                  <th className="num payroll-group-attendance">{t("payrollColWorkHours")}</th>
+                  <th className="num payroll-group-attendance">{t("payrollColPaidLeaveHours")}</th>
+                  <th className="num payroll-group-attendance">{t("payrollColOtHours")}</th>
+                  <th className="num payroll-group-attendance">{t("payrollColLeaveDays")}</th>
+                  <th className="num payroll-group-deduct">{t("payrollColAbsentDays")}</th>
+                  <th className="num payroll-group-deduct">{t("payrollColUnpaidLeaveDays")}</th>
+                  <th className="payroll-group-deduct">{t("payrollColOtWarning")}</th>
+                  <th className="num payroll-group-money">{t("payrollColBase")}</th>
+                  <th className="num payroll-group-money">{t("payrollColOtPay")}</th>
+                  <th className="num payroll-group-money">{t("payrollColShortHoursDeduct")}</th>
+                  <th className="num payroll-group-money">{t("payrollColTotalDeduct")}</th>
+                  <th className="num payroll-group-payable">{t("payrollColGross")}</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.employee.id}>
-                    <td>{row.employee.enrollNo}</td>
-                    <td>
+                    <td className="payroll-sticky" data-label={t("payrollColEnrollNo")}>{row.employee.enrollNo}</td>
+                    <td className="payroll-sticky payroll-sticky-name" data-label={t("payrollColName")}>
                       <button
                         type="button"
                         className="payroll-name-button"
@@ -4004,15 +4002,15 @@ function App() {
                         <span>{t("payrollOpenReportHint")}</span>
                       </button>
                     </td>
-                    <td>{translateDataValue(row.employee.department, lang)}</td>
-                    <td>{row.employee.salary.type === "monthly" ? t("salaryTypeMonthly") : t("salaryTypeHourly")}</td>
-                    <td className="num">{row.workHours.toFixed(2)}</td>
-                    <td className="num">{row.paidLeaveHours.toFixed(2)}</td>
-                    <td className="num">{row.otHours.toFixed(2)}</td>
-                    <td className="num">{row.summary.leaveDays}</td>
-                    <td className="num">{row.absentDays}</td>
-                    <td className="num">{row.unpaidLeaveDays}</td>
-                    <td>
+                    <td data-label={t("payrollColDept")}>{translateDataValue(row.employee.department, lang)}</td>
+                    <td data-label={t("payrollColType")}>{row.employee.salary.type === "monthly" ? t("salaryTypeMonthly") : t("salaryTypeHourly")}</td>
+                    <td className="num" data-label={t("payrollColWorkHours")}>{row.workHours.toFixed(2)}</td>
+                    <td className="num" data-label={t("payrollColPaidLeaveHours")}>{row.paidLeaveHours.toFixed(2)}</td>
+                    <td className="num" data-label={t("payrollColOtHours")}>{row.otHours.toFixed(2)}</td>
+                    <td className="num" data-label={t("payrollColLeaveDays")}>{row.summary.leaveDays}</td>
+                    <td className="num" data-label={t("payrollColAbsentDays")}>{row.absentDays}</td>
+                    <td className="num" data-label={t("payrollColUnpaidLeaveDays")}>{row.unpaidLeaveDays}</td>
+                    <td data-label={t("payrollColOtWarning")}>
                       <span
                         className={cx(
                           "mini-pill",
@@ -4026,11 +4024,11 @@ function App() {
                         {payrollWarningsText(row)}
                       </span>
                     </td>
-                    <td className="num">{row.employee.salary.currency} {row.base.toFixed(2)}</td>
-                    <td className="num">{row.employee.salary.currency} {row.otPay.toFixed(2)}</td>
-                    <td className="num">−{row.employee.salary.currency} {row.shortHoursDeduct.toFixed(2)}</td>
-                    <td className="num">−{row.employee.salary.currency} {row.totalDeduct.toFixed(2)}</td>
-                    <td className="num"><strong>{row.employee.salary.currency} {row.gross.toFixed(2)}</strong></td>
+                    <td className="num" data-label={t("payrollColBase")}>{row.employee.salary.currency} {row.base.toFixed(2)}</td>
+                    <td className="num" data-label={t("payrollColOtPay")}>{row.employee.salary.currency} {row.otPay.toFixed(2)}</td>
+                    <td className="num" data-label={t("payrollColShortHoursDeduct")}>-{row.employee.salary.currency} {row.shortHoursDeduct.toFixed(2)}</td>
+                    <td className="num" data-label={t("payrollColTotalDeduct")}>-{row.employee.salary.currency} {row.totalDeduct.toFixed(2)}</td>
+                    <td className="num payroll-payable-cell" data-label={t("payrollColGross")}><strong>{row.employee.salary.currency} {row.gross.toFixed(2)}</strong></td>
                   </tr>
                 ))}
                 {rows.length === 0 ? (
@@ -4332,55 +4330,69 @@ function App() {
               <p>{t("settingMasterListsHint")}</p>
             </div>
           </header>
-          <div className="settings-grid">
-            <SettingList
-              title={t("settingListCompanies")}
-              addPlaceholder={t("settingListAddCompany")}
-              items={data.settings.companies}
-              value={newCompany}
-              onValue={setNewCompany}
-              onAdd={() => { addSettingItem("companies", newCompany); setNewCompany(""); }}
-              onRemove={(value) => removeSettingItem("companies", value)}
-              renderItem={(item) => translateDataValue(item, lang)}
-              emptyHint={emptyHint}
-              deleteAria={deleteAria}
-            />
-            <SettingList
-              title={t("settingListDepartments")}
-              addPlaceholder={t("settingListAddDepartment")}
-              items={data.settings.departments}
-              value={newDepartment}
-              onValue={setNewDepartment}
-              onAdd={() => { addSettingItem("departments", newDepartment); setNewDepartment(""); }}
-              onRemove={(value) => removeSettingItem("departments", value)}
-              renderItem={(item) => translateDataValue(item, lang)}
-              emptyHint={emptyHint}
-              deleteAria={deleteAria}
-            />
-            <SettingList
-              title={t("settingListPositions")}
-              addPlaceholder={t("settingListAddPosition")}
-              items={data.settings.positions}
-              value={newPosition}
-              onValue={setNewPosition}
-              onAdd={() => { addSettingItem("positions", newPosition); setNewPosition(""); }}
-              onRemove={(value) => removeSettingItem("positions", value)}
-              renderItem={(item) => translateDataValue(item, lang)}
-              emptyHint={emptyHint}
-              deleteAria={deleteAria}
-            />
-            <SettingList
-              title={t("settingListNationalities")}
-              addPlaceholder={t("settingListAddNationality")}
-              items={data.settings.nationalities}
-              value={newNationality}
-              onValue={setNewNationality}
-              onAdd={() => { addSettingItem("nationalities", newNationality); setNewNationality(""); }}
-              onRemove={(value) => removeSettingItem("nationalities", value)}
-              renderItem={(item) => translateDataValue(item, lang)}
-              emptyHint={emptyHint}
-              deleteAria={deleteAria}
-            />
+          <div className="settings-list-groups">
+            <section className="settings-list-group">
+              <div className="settings-list-group-head">
+                <h3>{t("settingProfileListsTitle")}</h3>
+                <p>{t("settingProfileListsHint")}</p>
+              </div>
+              <div className="settings-grid">
+                <SettingList
+                  title={t("settingListCompanies")}
+                  addPlaceholder={t("settingListAddCompany")}
+                  items={data.settings.companies}
+                  value={newCompany}
+                  onValue={setNewCompany}
+                  onAdd={() => { addSettingItem("companies", newCompany); setNewCompany(""); }}
+                  onRemove={(value) => removeSettingItem("companies", value)}
+                  renderItem={(item) => translateDataValue(item, lang)}
+                  emptyHint={emptyHint}
+                  deleteAria={deleteAria}
+                />
+                <SettingList
+                  title={t("settingListDepartments")}
+                  addPlaceholder={t("settingListAddDepartment")}
+                  items={data.settings.departments}
+                  value={newDepartment}
+                  onValue={setNewDepartment}
+                  onAdd={() => { addSettingItem("departments", newDepartment); setNewDepartment(""); }}
+                  onRemove={(value) => removeSettingItem("departments", value)}
+                  renderItem={(item) => translateDataValue(item, lang)}
+                  emptyHint={emptyHint}
+                  deleteAria={deleteAria}
+                />
+                <SettingList
+                  title={t("settingListPositions")}
+                  addPlaceholder={t("settingListAddPosition")}
+                  items={data.settings.positions}
+                  value={newPosition}
+                  onValue={setNewPosition}
+                  onAdd={() => { addSettingItem("positions", newPosition); setNewPosition(""); }}
+                  onRemove={(value) => removeSettingItem("positions", value)}
+                  renderItem={(item) => translateDataValue(item, lang)}
+                  emptyHint={emptyHint}
+                  deleteAria={deleteAria}
+                />
+                <SettingList
+                  title={t("settingListNationalities")}
+                  addPlaceholder={t("settingListAddNationality")}
+                  items={data.settings.nationalities}
+                  value={newNationality}
+                  onValue={setNewNationality}
+                  onAdd={() => { addSettingItem("nationalities", newNationality); setNewNationality(""); }}
+                  onRemove={(value) => removeSettingItem("nationalities", value)}
+                  renderItem={(item) => translateDataValue(item, lang)}
+                  emptyHint={emptyHint}
+                  deleteAria={deleteAria}
+                />
+              </div>
+            </section>
+            <section className="settings-list-group">
+              <div className="settings-list-group-head">
+                <h3>{t("settingAttendanceListsTitle")}</h3>
+                <p>{t("settingAttendanceListsHint")}</p>
+              </div>
+              <div className="settings-grid">
             <SettingList
               title={t("settingListCorrectionReasons")}
               addPlaceholder={t("settingListAddCorrectionReason")}
@@ -4451,6 +4463,8 @@ function App() {
                 <Button icon={Plus} type="submit" disabled={!newLeaveType.trim()} />
               </form>
             </div>
+              </div>
+            </section>
           </div>
         </section>
       </div>
