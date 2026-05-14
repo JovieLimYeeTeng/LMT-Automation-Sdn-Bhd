@@ -29,15 +29,15 @@ export const dict = {
     loginErrorUsb: "U盘密钥不正确",
 
     // Nav
-    navThisMonth: "This Month",
+    navThisMonth: "本月工作",
     navOverview: "本月总览",
     navImport: "数据导入",
-    navEmployees: "Employees",
-    navShifts: "Shift 设置",
+    navEmployees: "员工资料",
+    navShifts: "班次设置",
     navTimecards: "打卡修正",
-    navLeave: "Leave / OT",
-    navReports: "Reports",
-    navSettings: "Settings",
+    navLeave: "请假 / OT",
+    navReports: "报表",
+    navSettings: "设置",
 
     // Generic
     save: "保存",
@@ -620,8 +620,8 @@ export const dict = {
     payrollPreviewNoDataBody: "这个月份还没有导入打卡 / 请假记录。先导入本月记录后，系统才会显示工时、旷工扣款和参考应发。",
 
     // Payroll top-level view
-    navPayroll: "Payroll 核对",
-    payrollTitle: "Payroll 核对",
+    navPayroll: "发薪核对",
+    payrollTitle: "发薪核对",
     payrollSubtitle: "根据 Timecard 整理工时、OT、Leave、旷工和参考金额，导出 CSV 给会计。不含 EPF、SOCSO、EIS、PCB / Tax 等法定项目。",
     payrollClickEmployeeHint: "点击员工姓名，可打开该员工的个人月报，方便 HR 在 Payroll 前复核。",
     payrollOpenReportHint: "打开月报",
