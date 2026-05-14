@@ -91,8 +91,6 @@ import type {
 
 const STORAGE_KEY = "tms-hr-prototype-state-v2";
 const SESSION_KEY = "tms-hr-prototype-session-v1";
-const VIEW_STORAGE_KEY = "tms-hr-active-view-v1";
-const MONTH_STAGE_STORAGE_KEY = "tms-hr-month-stage-v1";
 const FOCUS_EMPLOYEE_KEY = "tms-hr-focus-employee-v1";
 
 type ViewId = "thisMonth" | "employees" | "reports" | "settings";
@@ -602,14 +600,8 @@ function App() {
   const [passwordInput, setPasswordInput] = useState("");
   const [usbTokenInput, setUsbTokenInput] = useState("");
   const [loginError, setLoginError] = useState("");
-  const [activeView, setActiveView] = useState<ViewId>(() => {
-    const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
-    return (VIEW_IDS as ReadonlyArray<string>).includes(stored ?? "") ? (stored as ViewId) : "thisMonth";
-  });
-  const [monthStage, setMonthStage] = useState<MonthStage>(() => {
-    const stored = window.localStorage.getItem(MONTH_STAGE_STORAGE_KEY);
-    return (MONTH_STAGES as ReadonlyArray<string>).includes(stored ?? "") ? (stored as MonthStage) : "home";
-  });
+  const [activeView, setActiveView] = useState<ViewId>("thisMonth");
+  const [monthStage, setMonthStage] = useState<MonthStage>("home");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("shifts");
   const [employeeListMode, setEmployeeListMode] = useState(true);
   const [shiftListMode, setShiftListMode] = useState(true);
@@ -715,14 +707,6 @@ function App() {
     window.localStorage.setItem(LANG_STORAGE_KEY, lang);
     document.documentElement.lang = lang === "en" ? "en" : "zh-Hans";
   }, [lang]);
-
-  useEffect(() => {
-    window.localStorage.setItem(VIEW_STORAGE_KEY, activeView);
-  }, [activeView]);
-
-  useEffect(() => {
-    window.localStorage.setItem(MONTH_STAGE_STORAGE_KEY, monthStage);
-  }, [monthStage]);
 
   useEffect(() => {
     if (selectedEmployeeId) window.localStorage.setItem(FOCUS_EMPLOYEE_KEY, selectedEmployeeId);
