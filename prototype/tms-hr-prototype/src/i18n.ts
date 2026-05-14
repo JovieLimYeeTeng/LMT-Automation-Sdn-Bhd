@@ -543,7 +543,7 @@ export const dict = {
     // Domain - flag tokens (rendered together with parameters)
     flagLate: "迟到 {duration}",
     flagEarly: "早退 {duration}",
-    flagOT: "OT {duration}",
+    flagOT: "OT 待复核 {duration}",
     flagLunchOver: "午餐超时 {duration}",
     flagUnderWork: "工时不足 {hours}小时",
     flagUnderWorkAccepted: "已接受短工时（未满 {hours}小时）",
