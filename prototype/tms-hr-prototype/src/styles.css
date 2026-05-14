@@ -1664,6 +1664,70 @@ input[type="color"] {
   grid-template-columns: 1.35fr 1fr 1fr 0.7fr 1.2fr;
 }
 
+.attendance-rules-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.attendance-rule-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.05fr) minmax(240px, 1fr) minmax(240px, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.attendance-rule-card,
+.attendance-subsection-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfdfb;
+  padding: 12px;
+}
+
+.attendance-rule-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.attendance-rule-card .field,
+.attendance-rule-card .toggle-line {
+  margin: 0;
+}
+
+.attendance-rule-card .toggle-line {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 44px;
+  background: #fff;
+}
+
+.attendance-rule-card .field-help {
+  display: block;
+  min-height: 34px;
+  line-height: 1.35;
+}
+
+.attendance-subsection-grid {
+  margin-top: 0;
+  align-items: stretch;
+}
+
+.attendance-subsection-card h3 {
+  margin-bottom: 12px;
+}
+
+.attendance-subsection-card .chip-grid {
+  gap: 10px;
+}
+
+.attendance-subsection-card .check-chip {
+  min-width: 116px;
+  justify-content: flex-start;
+  background: #fff;
+}
+
 .split-layout {
   display: grid;
   grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
@@ -2849,7 +2913,8 @@ input[type="color"] {
     flex-direction: column;
   }
   .employee-filter-grid,
-  .bulk-condition-grid {
+  .bulk-condition-grid,
+  .attendance-rule-grid {
     grid-template-columns: 1fr;
   }
 }

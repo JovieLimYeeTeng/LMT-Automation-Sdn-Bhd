@@ -2563,84 +2563,92 @@ function App() {
             </div>
           </section>
 
-          <section className="panel">
+          <section className="panel attendance-rules-panel">
             <SectionTitle title={t("empGroupAttendance")} />
-            <div className="form-grid three">
-              <Field label={t("shiftLabel")}>
-                <select value={selectedEmployee.shiftId} onChange={(event) => patchEmployee(selectedEmployee.id, { shiftId: event.target.value })}>
-                  {data.shifts.map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
-                </select>
-              </Field>
-              <label className="toggle-line">
-                <input
-                  type="checkbox"
-                  checked={selectedEmployee.autoShift}
-                  disabled={selectedEmployee.flexibleWork}
-                  onChange={(event) => {
-                    const autoShift = event.target.checked;
-                    patchEmployee(selectedEmployee.id, {
-                      autoShift,
-                    });
-                  }}
-                />
-                <span>{t("autoShiftLabel")}</span>
-              </label>
-              <label className="toggle-line">
-                <input
-                  type="checkbox"
-                  checked={selectedEmployee.flexibleWork}
-                  onChange={(event) => {
-                    const flexibleWork = event.target.checked;
-                    patchEmployee(selectedEmployee.id, {
-                      flexibleWork,
-                      autoShift: flexibleWork ? false : selectedEmployee.autoShift,
-                    });
-                  }}
-                />
-                <span>{t("employeeFlexibleWorkToggle")}</span>
-              </label>
-              <Field label={t("employeeWorkLengthLabel")}>
-                <input
-                  type="number"
-                  min="1"
-                  step="0.5"
-                  value={selectedEmployee.workLengthHours}
-                  disabled={!selectedEmployee.flexibleWork}
-                  onChange={(event) => patchEmployee(selectedEmployee.id, { workLengthHours: Number(event.target.value) })}
-                />
-                <small className="field-help">{t(selectedEmployee.flexibleWork ? "employeeFlexibleWorkHelp" : "employeeFlexibleWorkDisabledHelp")}</small>
-              </Field>
-              <label className="toggle-line">
-                <input
-                  type="checkbox"
-                  checked={selectedEmployee.flexibleLunch}
-                  onChange={(event) => patchEmployee(selectedEmployee.id, { flexibleLunch: event.target.checked })}
-                />
-                <span>{t("employeeFlexibleLunchToggle")}</span>
-              </label>
-              <Field label={t("employeeLunchMinutesLabel")}>
-                <input
-                  type="number"
-                  min="0"
-                  step="5"
-                  value={selectedEmployee.lunchMinutes}
-                  disabled={!selectedEmployee.flexibleLunch}
-                  onChange={(event) => patchEmployee(selectedEmployee.id, { lunchMinutes: Number(event.target.value) })}
-                />
-                <small className="field-help">{t(selectedEmployee.flexibleLunch ? "employeeFlexibleLunchHelp" : "employeeFlexibleLunchDisabledHelp")}</small>
-              </Field>
-              <Field label={t("employeeGraceMinutesLabel")}>
-                <input
-                  type="number"
-                  min="0"
-                  step="5"
-                  value={selectedEmployee.graceMinutes}
-                  onChange={(event) => patchEmployee(selectedEmployee.id, { graceMinutes: Number(event.target.value) })}
-                />
-              </Field>
+            <div className="attendance-rule-grid">
+              <div className="attendance-rule-card">
+                <Field label={t("shiftLabel")}>
+                  <select value={selectedEmployee.shiftId} onChange={(event) => patchEmployee(selectedEmployee.id, { shiftId: event.target.value })}>
+                    {data.shifts.map((shift) => <option key={shift.id} value={shift.id}>{translateDataValue(shift.name, lang)}</option>)}
+                  </select>
+                </Field>
+                <label className="toggle-line">
+                  <input
+                    type="checkbox"
+                    checked={selectedEmployee.autoShift}
+                    disabled={selectedEmployee.flexibleWork}
+                    onChange={(event) => {
+                      const autoShift = event.target.checked;
+                      patchEmployee(selectedEmployee.id, {
+                        autoShift,
+                      });
+                    }}
+                  />
+                  <span>{t("autoShiftLabel")}</span>
+                </label>
+                <Field label={t("employeeGraceMinutesLabel")}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="5"
+                    value={selectedEmployee.graceMinutes}
+                    onChange={(event) => patchEmployee(selectedEmployee.id, { graceMinutes: Number(event.target.value) })}
+                  />
+                </Field>
+              </div>
+
+              <div className="attendance-rule-card">
+                <label className="toggle-line">
+                  <input
+                    type="checkbox"
+                    checked={selectedEmployee.flexibleWork}
+                    onChange={(event) => {
+                      const flexibleWork = event.target.checked;
+                      patchEmployee(selectedEmployee.id, {
+                        flexibleWork,
+                        autoShift: flexibleWork ? false : selectedEmployee.autoShift,
+                      });
+                    }}
+                  />
+                  <span>{t("employeeFlexibleWorkToggle")}</span>
+                </label>
+                <Field label={t("employeeWorkLengthLabel")}>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.5"
+                    value={selectedEmployee.workLengthHours}
+                    disabled={!selectedEmployee.flexibleWork}
+                    onChange={(event) => patchEmployee(selectedEmployee.id, { workLengthHours: Number(event.target.value) })}
+                  />
+                  <small className="field-help">{t(selectedEmployee.flexibleWork ? "employeeFlexibleWorkHelp" : "employeeFlexibleWorkDisabledHelp")}</small>
+                </Field>
+              </div>
+
+              <div className="attendance-rule-card">
+                <label className="toggle-line">
+                  <input
+                    type="checkbox"
+                    checked={selectedEmployee.flexibleLunch}
+                    onChange={(event) => patchEmployee(selectedEmployee.id, { flexibleLunch: event.target.checked })}
+                  />
+                  <span>{t("employeeFlexibleLunchToggle")}</span>
+                </label>
+                <Field label={t("employeeLunchMinutesLabel")}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="5"
+                    value={selectedEmployee.lunchMinutes}
+                    disabled={!selectedEmployee.flexibleLunch}
+                    onChange={(event) => patchEmployee(selectedEmployee.id, { lunchMinutes: Number(event.target.value) })}
+                  />
+                  <small className="field-help">{t(selectedEmployee.flexibleLunch ? "employeeFlexibleLunchHelp" : "employeeFlexibleLunchDisabledHelp")}</small>
+                </Field>
+              </div>
             </div>
-            <div className="subsection-grid">
-              <div>
+            <div className="subsection-grid attendance-subsection-grid">
+              <div className="attendance-subsection-card">
                 <h3>{t("restDaysTitle")}</h3>
                 <div className="chip-grid">
                   {weekdayOrder.map((day) => (
@@ -2660,7 +2668,7 @@ function App() {
                   ))}
                 </div>
               </div>
-              <div>
+              <div className="attendance-subsection-card">
                 <h3>{t("exemptionsTitle")}</h3>
                 <div className="chip-grid">
                   {[
