@@ -87,13 +87,13 @@ export function formatFlag(flag: FlagToken, lang: Lang): string {
   const t = makeT(lang);
   switch (flag.kind) {
     case "late":
-      return t("flagLate", { duration: formatDuration(flag.minutes) });
+      return t("flagLate", { duration: formatDuration(flag.minutes, lang) });
     case "early":
-      return t("flagEarly", { duration: formatDuration(flag.minutes) });
+      return t("flagEarly", { duration: formatDuration(flag.minutes, lang) });
     case "ot":
-      return t("flagOT", { duration: formatDuration(flag.minutes) });
+      return t("flagOT", { duration: formatDuration(flag.minutes, lang) });
     case "lunchOver":
-      return t("flagLunchOver", { duration: formatDuration(flag.minutes) });
+      return t("flagLunchOver", { duration: formatDuration(flag.minutes, lang) });
     case "underWork":
       return t("flagUnderWork", { hours: flag.hours });
     case "underWorkAccepted":
@@ -284,13 +284,24 @@ export function timeFromMinutes(totalMinutes: number): string {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
-export function formatDuration(minutes: number): string {
+export function formatDuration(minutes: number, lang: Lang = "en"): string {
   if (minutes <= 0) return "-";
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
+  if (lang === "zh") {
+    if (hours === 0) return `${mins}分钟`;
+    if (mins === 0) return `${hours}小时`;
+    return `${hours}小时${mins}分钟`;
+  }
   if (hours === 0) return `${mins}m`;
   if (mins === 0) return `${hours}h`;
   return `${hours}h ${mins}m`;
+}
+
+export function formatHoursLabel(minutes: number, lang: Lang = "en"): string {
+  const value = formatHours(minutes);
+  if (value === "-") return value;
+  return lang === "zh" ? `${value}小时` : `${value}h`;
 }
 
 export function formatHours(minutes: number): string {

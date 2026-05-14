@@ -44,6 +44,7 @@ import {
   formatDuration,
   formatFlags,
   formatHours,
+  formatHoursLabel,
   getMonthlyReadiness,
   getRecordsForMonth,
   getWeekday,
@@ -132,6 +133,10 @@ const defaultDeviceSettings = {
   card: true,
   model: "",
 };
+
+function formatDecimalHours(hours: number, lang: Lang): string {
+  return lang === "zh" ? `${hours.toFixed(2)}小时` : `${hours.toFixed(2)}h`;
+}
 
 function normalizeDataList(values: string[] | undefined): string[] {
   return Array.from(new Set((values ?? []).map(normalizeDataValue).filter(Boolean)));
@@ -1839,7 +1844,7 @@ function App() {
           />
           <Metric
             label={t("metricOvertimeHours")}
-            value={actionableOvertimeHours === "-" ? "—" : `${actionableOvertimeHours} h`}
+            value={actionableOvertimeHours === "-" ? "—" : lang === "zh" ? `${actionableOvertimeHours}小时` : `${actionableOvertimeHours} h`}
             icon={Clock3}
             onClick={() => openReports("overtime")}
           />
@@ -2728,9 +2733,9 @@ function App() {
                     <span>{t("payrollPreviewMonth")} {selectedMonth}</span>
                   </div>
                   <div className="payroll-preview-grid">
-                    <div><span>{t("payrollPreviewWorkHours")}</span><strong>{pay.workHours.toFixed(2)}h</strong></div>
-                    <div><span>{t("payrollPreviewPaidLeaveHours")}</span><strong>{pay.summary.paidLeaveHours.toFixed(2)}h</strong></div>
-                    <div><span>{t("payrollPreviewOtHours")}</span><strong>{pay.otHours.toFixed(2)}h</strong></div>
+                    <div><span>{t("payrollPreviewWorkHours")}</span><strong>{formatDecimalHours(pay.workHours, lang)}</strong></div>
+                    <div><span>{t("payrollPreviewPaidLeaveHours")}</span><strong>{formatDecimalHours(pay.summary.paidLeaveHours, lang)}</strong></div>
+                    <div><span>{t("payrollPreviewOtHours")}</span><strong>{formatDecimalHours(pay.otHours, lang)}</strong></div>
                     <div><span>{t("payrollPreviewLeaveDays")}</span><strong>{pay.summary.leaveDays}</strong></div>
                     <div><span>{t("payrollColAbsentDays")}</span><strong>{pay.summary.absentDays}</strong></div>
                     <div><span>{t("payrollPreviewDeductibleLeaveDays")}</span><strong>{pay.summary.deductibleLeaveDays}</strong></div>
@@ -3415,7 +3420,7 @@ function App() {
                     : t("sourceDefault")}
               </span>
               {selectedDateRecord.workMinutes > 0 ? (
-                <span className="muted">{t("workHoursPrefix")} {formatHours(selectedDateRecord.workMinutes)}h</span>
+                <span className="muted">{t("workHoursPrefix")} {formatHoursLabel(selectedDateRecord.workMinutes, lang)}</span>
               ) : null}
             </div>
           ) : null}
@@ -3624,11 +3629,11 @@ function App() {
                 </div>
                 <div>
                   <span>{t("otSimWorkHours")}</span>
-                  <strong>{formatHours(otSimRecord.workMinutes)}h</strong>
+                  <strong>{formatHoursLabel(otSimRecord.workMinutes, lang)}</strong>
                 </div>
                 <div>
                   <span>{t("colOT")}</span>
-                  <strong>{formatDuration(otSimRecord.overtimeMinutes)}</strong>
+                  <strong>{formatDuration(otSimRecord.overtimeMinutes, lang)}</strong>
                 </div>
                 <div className="overtime-sim-pay">
                   <span>{t("otSimOtPay")}</span>
@@ -3660,7 +3665,7 @@ function App() {
                     <td>{displayEmployeeName(record.employee)}</td>
                     <td>{record.shift?.name ? translateDataValue(record.shift.name, lang) : "-"}</td>
                     <td>{recordPunchTime(record, "out", lang)}</td>
-                    <td>{formatDuration(record.overtimeMinutes)}</td>
+                    <td>{formatDuration(record.overtimeMinutes, lang)}</td>
                     <td>{formatFlags(record.flags, lang)}</td>
                   </tr>
                 ))}
@@ -3690,18 +3695,17 @@ function App() {
         default: return "";
       }
     };
-    const reportCardPurpose = (id: ReportId) => {
-      if (id === "summary") return t("reportPurposeCompany");
-      if (id === "personal") return t("reportPurposeEmployeePrint");
-      if (id === "raw") return t("reportPurposeRawAudit");
-      return t("reportPurposeAudit");
-    };
-    const requiredReportCards: Array<{ id: ReportId; title: string; hint: string; purpose: string }> = reportOptions.map((option) => ({
+    const requiredReportCards: Array<{ id: ReportId; title: string; hint: string }> = reportOptions.map((option) => ({
       id: option.id,
       title: option.label[lang],
       hint: reportCardHint(option.id),
-      purpose: reportCardPurpose(option.id),
     }));
+    const reportCardMap = new Map(requiredReportCards.map((card) => [card.id, card]));
+    const reportGroups: Array<{ title: string; ids: ReportId[] }> = [
+      { title: t("reportGroupMonthly"), ids: ["summary", "punchGrid", "lateEarly", "leave", "overtime", "absent"] },
+      { title: t("reportGroupPersonal"), ids: ["personal"] },
+      { title: t("reportGroupDevice"), ids: ["raw"] },
+    ];
 
     return (
       <div className="view-stack">
@@ -3725,18 +3729,28 @@ function App() {
               <span>{t("officialReportHint")}</span>
             </div>
           </div>
-          <div className="report-format-strip">
-            {requiredReportCards.map((card) => (
-              <button
-                key={card.id}
-                type="button"
-                className={cx("report-format-card", reportType === card.id && "report-format-card-active")}
-                onClick={() => setReportType(card.id)}
-              >
-                <small>{card.purpose}</small>
-                <strong>{card.title}</strong>
-                <span>{card.hint}</span>
-              </button>
+          <div className="report-format-groups">
+            {reportGroups.map((group) => (
+              <section key={group.title} className="report-format-group" aria-label={group.title}>
+                <h3>{group.title}</h3>
+                <div className="report-format-strip">
+                  {group.ids.map((reportId) => {
+                    const card = reportCardMap.get(reportId);
+                    if (!card) return null;
+                    return (
+                      <button
+                        key={card.id}
+                        type="button"
+                        className={cx("report-format-card", reportType === card.id && "report-format-card-active")}
+                        onClick={() => setReportType(card.id)}
+                      >
+                        <strong>{card.title}</strong>
+                        <span>{card.hint}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             ))}
           </div>
           <div className="toolbar reports-toolbar">
@@ -4612,9 +4626,9 @@ function buildReport(
         [colWorkDays]: scheduledDays,
         [colAttendDays]: attendedDays,
         [colAbsent]: summary.absentDays,
-        [colLateMins]: formatDuration(lateMinutes),
+        [colLateMins]: formatDuration(lateMinutes, lang),
         [colLateTimes]: summary.lateCount,
-        [colEarlyMins]: formatDuration(earlyMinutes),
+        [colEarlyMins]: formatDuration(earlyMinutes, lang),
         [colEarlyTimes]: summary.earlyCount,
         [colOTHours]: formatHours(summary.overtimeMinutes),
       };
@@ -4700,8 +4714,8 @@ function buildReport(
         [colName]: displayEmployeeName(record.employee),
         [colDept]: translateDataValue(record.employee.department, lang),
         [colShift]: record.shift?.name ? translateDataValue(record.shift.name, lang) : "-",
-        [colLate]: formatDuration(record.lateMinutes),
-        [colEarly]: formatDuration(record.earlyMinutes),
+        [colLate]: formatDuration(record.lateMinutes, lang),
+        [colEarly]: formatDuration(record.earlyMinutes, lang),
         [colNotes]: formatFlags(record.flags, lang),
       }));
     return { title: tr("reportLateEarlyTitle"), columns, rows };
@@ -4751,7 +4765,7 @@ function buildReport(
         [colDept]: translateDataValue(record.employee.department, lang),
         [colShift]: record.shift?.name ? translateDataValue(record.shift.name, lang) : "-",
         [colOut]: recordPunchTime(record, "out", lang),
-        [colOT]: formatDuration(record.overtimeMinutes),
+        [colOT]: formatDuration(record.overtimeMinutes, lang),
       }));
     return { title: tr("reportOvertimeTitle"), columns, rows };
   }
