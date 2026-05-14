@@ -2300,7 +2300,38 @@ input[type="color"] {
 }
 
 .payroll-table {
-  min-width: 1180px;
+  min-width: 1660px;
+  table-layout: fixed;
+}
+
+.payroll-table th,
+.payroll-table td {
+  padding: 13px 16px;
+}
+
+.payroll-table th {
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.25;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  vertical-align: middle;
+}
+
+.payroll-col-enroll { width: 96px; }
+.payroll-col-name { width: 220px; }
+.payroll-col-dept { width: 104px; }
+.payroll-col-type { width: 90px; }
+.payroll-col-hours { width: 84px; }
+.payroll-col-hours-wide { width: 106px; }
+.payroll-col-days { width: 72px; }
+.payroll-col-days-wide { width: 92px; }
+.payroll-col-notes { width: 170px; }
+.payroll-col-money { width: 122px; }
+.payroll-col-payable { width: 136px; }
+
+.payroll-table .num {
+  white-space: nowrap;
 }
 
 .payroll-table .payroll-sticky {
@@ -2308,6 +2339,7 @@ input[type="color"] {
   left: 0;
   z-index: 2;
   background: #fff;
+  box-shadow: 1px 0 0 var(--line);
 }
 
 .payroll-table thead .payroll-sticky {
@@ -2316,9 +2348,13 @@ input[type="color"] {
 }
 
 .payroll-table .payroll-sticky-name {
-  left: 88px;
-  min-width: 180px;
+  left: 96px;
+  min-width: 220px;
   box-shadow: 1px 0 0 var(--line);
+}
+
+.payroll-table tbody .payroll-sticky-name {
+  background: #fff;
 }
 
 .payroll-table .payroll-group-attendance,
@@ -2345,9 +2381,25 @@ input[type="color"] {
   background: #f4f7fb;
 }
 
+.payroll-notes-cell .mini-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.payroll-money-cell span,
+.payroll-payable-cell span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .payroll-payable-cell strong {
   color: var(--green-dark);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .overtime-sim {

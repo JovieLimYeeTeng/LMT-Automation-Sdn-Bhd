@@ -3964,6 +3964,24 @@ function App() {
           <div className="table-wrap report-table">
             <p className="table-help">{t("payrollClickEmployeeHint")}</p>
             <table className="payroll-table">
+              <colgroup>
+                <col className="payroll-col-enroll" />
+                <col className="payroll-col-name" />
+                <col className="payroll-col-dept" />
+                <col className="payroll-col-type" />
+                <col className="payroll-col-hours" />
+                <col className="payroll-col-hours-wide" />
+                <col className="payroll-col-hours" />
+                <col className="payroll-col-days" />
+                <col className="payroll-col-days" />
+                <col className="payroll-col-days-wide" />
+                <col className="payroll-col-notes" />
+                <col className="payroll-col-money" />
+                <col className="payroll-col-money" />
+                <col className="payroll-col-money" />
+                <col className="payroll-col-money" />
+                <col className="payroll-col-payable" />
+              </colgroup>
               <thead>
                 <tr>
                   <th className="payroll-sticky payroll-group-info">{t("payrollColEnrollNo")}</th>
@@ -4006,7 +4024,7 @@ function App() {
                     <td className="num" data-label={t("payrollColLeaveDays")}>{row.summary.leaveDays}</td>
                     <td className="num" data-label={t("payrollColAbsentDays")}>{row.absentDays}</td>
                     <td className="num" data-label={t("payrollColUnpaidLeaveDays")}>{row.unpaidLeaveDays}</td>
-                    <td data-label={t("payrollColOtWarning")}>
+                    <td className="payroll-notes-cell" data-label={t("payrollColOtWarning")}>
                       <span
                         className={cx(
                           "mini-pill",
@@ -4020,11 +4038,11 @@ function App() {
                         {payrollWarningsText(row)}
                       </span>
                     </td>
-                    <td className="num" data-label={t("payrollColBase")}>{row.employee.salary.currency} {row.base.toFixed(2)}</td>
-                    <td className="num" data-label={t("payrollColOtPay")}>{row.employee.salary.currency} {row.otPay.toFixed(2)}</td>
-                    <td className="num" data-label={t("payrollColShortHoursDeduct")}>-{row.employee.salary.currency} {row.shortHoursDeduct.toFixed(2)}</td>
-                    <td className="num" data-label={t("payrollColTotalDeduct")}>-{row.employee.salary.currency} {row.totalDeduct.toFixed(2)}</td>
-                    <td className="num payroll-payable-cell" data-label={t("payrollColGross")}><strong>{row.employee.salary.currency} {row.gross.toFixed(2)}</strong></td>
+                    <td className="num payroll-money-cell" data-label={t("payrollColBase")}><span>{row.employee.salary.currency}</span> {row.base.toFixed(2)}</td>
+                    <td className="num payroll-money-cell" data-label={t("payrollColOtPay")}><span>{row.employee.salary.currency}</span> {row.otPay.toFixed(2)}</td>
+                    <td className="num payroll-money-cell" data-label={t("payrollColShortHoursDeduct")}>-<span>{row.employee.salary.currency}</span> {row.shortHoursDeduct.toFixed(2)}</td>
+                    <td className="num payroll-money-cell" data-label={t("payrollColTotalDeduct")}>-<span>{row.employee.salary.currency}</span> {row.totalDeduct.toFixed(2)}</td>
+                    <td className="num payroll-money-cell payroll-payable-cell" data-label={t("payrollColGross")}><strong><span>{row.employee.salary.currency}</span> {row.gross.toFixed(2)}</strong></td>
                   </tr>
                 ))}
                 {rows.length === 0 ? (
