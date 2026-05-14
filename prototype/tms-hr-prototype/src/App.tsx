@@ -310,7 +310,7 @@ function hydrateData(raw: AppData): AppData {
 }
 
 type ReportId = "personal" | "summary" | "punchGrid" | "lateEarly" | "leave" | "overtime" | "absent" | "raw";
-type TimecardStatusFilter = "all" | "absent" | "incomplete" | "shortHours" | "lateEarly" | "overtime";
+type TimecardStatusFilter = "all" | "absent" | "incomplete" | "shortHours" | "lateEarly";
 
 const copy = dict;
 
@@ -3081,7 +3081,7 @@ function App() {
     const hasOperationalData = data.punches.some((punch) => punch.date.startsWith(selectedMonth)) || data.leaves.some((leave) => leave.date.startsWith(selectedMonth));
     const pendingRecords = hasOperationalData
       ? monthRecords
-          .filter((record) => record.status === "absent" || record.status === "incomplete" || record.lateMinutes > 0 || record.earlyMinutes > 0 || record.overtimeMinutes > 0 || record.flags.some((f) => f.kind === "lunchOver" || f.kind === "underWork"))
+          .filter((record) => record.status === "absent" || record.status === "incomplete" || record.lateMinutes > 0 || record.earlyMinutes > 0 || record.flags.some((f) => f.kind === "lunchOver" || f.kind === "underWork"))
           .sort((a, b) => `${a.date} ${a.employee.enrollNo}`.localeCompare(`${b.date} ${b.employee.enrollNo}`))
       : [];
     const pendingStats = {
@@ -3090,7 +3090,6 @@ function App() {
       incomplete: pendingRecords.filter((record) => record.status === "incomplete").length,
       shortHours: pendingRecords.filter((record) => record.flags.some((flag) => flag.kind === "underWork")).length,
       lateEarly: pendingRecords.filter((record) => record.lateMinutes > 0 || record.earlyMinutes > 0).length,
-      overtime: pendingRecords.filter((record) => record.overtimeMinutes > 0).length,
     };
     const normalizedSearch = timecardSearch.trim().toLowerCase();
     const filteredPendingRecords = pendingRecords.filter((record) => {
@@ -3098,7 +3097,6 @@ function App() {
       if (timecardStatusFilter === "incomplete" && record.status !== "incomplete") return false;
       if (timecardStatusFilter === "shortHours" && !record.flags.some((flag) => flag.kind === "underWork")) return false;
       if (timecardStatusFilter === "lateEarly" && record.lateMinutes === 0 && record.earlyMinutes === 0) return false;
-      if (timecardStatusFilter === "overtime" && record.overtimeMinutes === 0) return false;
       if (!normalizedSearch) return true;
       const haystack = [
         record.date,
@@ -3138,7 +3136,6 @@ function App() {
         { id: "incomplete", label: t("timecardsFilterMissing"), value: pendingStats.incomplete, tone: pendingStats.incomplete > 0 ? "warn" : "good", icon: AlertTriangle },
         { id: "shortHours", label: t("timecardsFilterShortHours"), value: pendingStats.shortHours, tone: pendingStats.shortHours > 0 ? "warn" : "good", icon: Clock3 },
         { id: "lateEarly", label: t("timecardsFilterLateEarly"), value: pendingStats.lateEarly, tone: pendingStats.lateEarly > 0 ? "warn" : "good", icon: Clock3 },
-        { id: "overtime", label: t("payrollOtWarnings"), value: pendingStats.overtime, tone: pendingStats.overtime > 0 ? "neutral" : "good", icon: Wallet },
         { id: "absent", label: t("timecardsFilterAbsent"), value: pendingStats.absent, tone: pendingStats.absent > 0 ? "bad" : "good", icon: WifiOff },
       ];
 
@@ -3259,7 +3256,6 @@ function App() {
                   <option value="incomplete">{t("timecardsFilterMissing")}</option>
                   <option value="shortHours">{t("timecardsFilterShortHours")}</option>
                   <option value="lateEarly">{t("timecardsFilterLateEarly")}</option>
-                  <option value="overtime">{t("payrollOtWarnings")}</option>
                   <option value="absent">{t("timecardsFilterAbsent")}</option>
                 </select>
               </Field>
