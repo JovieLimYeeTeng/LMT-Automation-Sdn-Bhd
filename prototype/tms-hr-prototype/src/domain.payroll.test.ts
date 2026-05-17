@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attendanceReviewId, calculateAttendance, createStandardWeek, findShiftForPunch, getMonthlyReadiness, normalizeShiftRules, payrollFor } from "./domain";
+import { attendanceReviewId, calculateAttendance, createStandardWeek, findShiftForPunch, getDeductionReviewItems, getMonthlyReadiness, normalizeShiftRules, payrollFor } from "./domain";
 import type { AppData, AttendanceReview, Employee, LeaveEntry, Punch, PunchKind, Shift } from "./types";
 
 const shift: Shift = {
@@ -128,7 +128,18 @@ function appData(
       nationalities: ["Malaysia"],
       leaveTypes: ["Annual leave", "Unpaid leave"],
       paidLeaveTypes: ["Annual leave"],
+      mcRequiredLeaveTypes: [],
       correctionReasons: ["Forgot punch in", "Forgot punch out"],
+      deductionReasons: ["First-time late", "Approved by management"],
+      deductionAmounts: {
+        source: "employee",
+        fullDayDeductPerDay: 100,
+        minuteDeductHourlyRate: 20,
+      },
+      deductionAmountOptions: [
+        { id: "deduct-option-none", label: "No deduction", amount: 0 },
+        { id: "deduct-option-minor", label: "Minor deduction", amount: 10 },
+      ],
       device: { fingerprint: true, face: false, card: true, model: "" },
       requirePassword: false,
       usbLicenseRequired: false,
@@ -252,16 +263,143 @@ describe("payrollFor", () => {
     expect(pay.gross).toBe(3000);
   });
 
-  it("deducts absent days from monthly salary", () => {
+  it("keeps absent days pending until HR saves a deduct decision", () => {
     const person = employee();
     const pay = payrollFor(appData(person), person, "2026-04");
 
     expect(pay.summary.absentDays).toBe(1);
     expect(pay.summary.missingCount).toBe(0);
-    expect(pay.absentDeduct).toBe(100);
-    expect(pay.gross).toBe(2900);
+    expect(pay.summary.deductedAbsentDays).toBe(0);
+    expect(pay.absentDeduct).toBe(0);
+    expect(pay.gross).toBe(3000);
     expect(pay.warningFlags).toContain("absent");
     expect(pay.warningFlags).not.toContain("missing");
+  });
+
+  it("deducts absent days only after HR saves a deduct decision", () => {
+    const person = employee();
+    const deductedReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "absent"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "absent",
+      decision: "deducted",
+      note: "No show",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const pay = payrollFor(appData(person, [], [], "2026-04-01", [shift], [deductedReview]), person, "2026-04");
+
+    expect(pay.summary.absentDays).toBe(1);
+    expect(pay.summary.deductedAbsentDays).toBe(1);
+    expect(pay.absentDeduct).toBe(100);
+    expect(pay.gross).toBe(2900);
+  });
+
+  it("can use Settings-controlled deduction amounts for saved HR decisions", () => {
+    const person = employee();
+    const absentReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "absent"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "absent",
+      decision: "deducted",
+      note: "No show",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const lateDay = fullDay("2026-04-02").map((item) => item.kind === "in" ? { ...item, time: "09:15" } : item);
+    const lateReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-02", "late"),
+      employeeId: person.id,
+      date: "2026-04-02",
+      kind: "late",
+      decision: "deducted",
+      note: "Deduct late",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const data = appData(person, lateDay, [], "2026-04-02", [shift], [absentReview, lateReview]);
+    data.settings.deductionAmounts = {
+      source: "settings",
+      fullDayDeductPerDay: 160,
+      minuteDeductHourlyRate: 10,
+    };
+    const pay = payrollFor(data, person, "2026-04");
+
+    expect(pay.absentDeduct).toBe(160);
+    expect(pay.lateEarlyDeduct).toBe(5);
+    expect(pay.totalDeduct).toBe(165);
+  });
+
+  it("uses Settings full-day deduction for saved absent decisions", () => {
+    const person = employee();
+    const absentReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "absent"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "absent",
+      decision: "deducted",
+      note: "No show",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const data = appData(person, [], [], "2026-04-01", [shift], [absentReview]);
+    data.settings.deductionAmounts = {
+      source: "settings",
+      fullDayDeductPerDay: 160,
+      minuteDeductHourlyRate: 10,
+    };
+    const pay = payrollFor(data, person, "2026-04");
+
+    expect(pay.absentDeduct).toBe(160);
+    expect(pay.totalDeduct).toBe(160);
+  });
+
+  it("falls back to Settings minute rate when employee deduction hourly rate is missing", () => {
+    const person = employee({ salary: { ...employee().salary, hourlyRate: 0 } });
+    const lateDay = fullDay().map((item) => item.kind === "in" ? { ...item, time: "09:15" } : item);
+    const lateReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "late"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "late",
+      decision: "deducted",
+      note: "Deduct late",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const data = appData(person, lateDay, [], "2026-04-01", [shift], [lateReview]);
+    data.settings.deductionAmounts = {
+      source: "employee",
+      fullDayDeductPerDay: 160,
+      minuteDeductHourlyRate: 10,
+    };
+    const pay = payrollFor(data, person, "2026-04");
+
+    expect(pay.lateEarlyDeduct).toBe(2.5);
+    expect(pay.reviewDeduct).toBe(2.5);
+    expect(pay.totalDeduct).toBe(2.5);
+  });
+
+  it("does not apply separate full-day absence deduction to hourly employees", () => {
+    const person = employee({ salary: { ...employee().salary, type: "hourly", hourlyRate: 20 } });
+    const absentReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "absent"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "absent",
+      decision: "deducted",
+      note: "No show",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const data = appData(person, [], [], "2026-04-01", [shift], [absentReview]);
+    data.settings.deductionAmounts = {
+      source: "settings",
+      fullDayDeductPerDay: 160,
+      minuteDeductHourlyRate: 10,
+    };
+    const pay = payrollFor(data, person, "2026-04");
+
+    expect(pay.summary.absentDays).toBe(1);
+    expect(pay.summary.deductedAbsentDays).toBe(1);
+    expect(pay.absentDeduct).toBe(0);
+    expect(pay.totalDeduct).toBe(0);
   });
 
   it("counts incomplete punches as missing punch, not absent", () => {
@@ -274,13 +412,212 @@ describe("payrollFor", () => {
     expect(pay.warningFlags).not.toContain("absent");
   });
 
-  it("deducts unpaid leave from monthly salary", () => {
+  it("applies saved late deductions to payroll reference", () => {
+    const person = employee();
+    const lateDay = fullDay().map((item) => item.kind === "in" ? { ...item, time: "09:15" } : item);
+    const deductedReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "late"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "late",
+      decision: "deducted",
+      note: "Deduct late",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const pay = payrollFor(appData(person, lateDay, [], "2026-04-01", [shift], [deductedReview]), person, "2026-04");
+
+    expect(pay.lateEarlyDeduct).toBe(5);
+    expect(pay.reviewDeduct).toBe(5);
+    expect(pay.totalDeduct).toBe(5);
+    expect(pay.gross).toBe(2995);
+  });
+
+  it("does not apply accepted late reviews to payroll reference", () => {
+    const person = employee();
+    const lateDay = fullDay().map((item) => item.kind === "in" ? { ...item, time: "09:15" } : item);
+    const acceptedReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "late"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "late",
+      decision: "accepted",
+      note: "First time",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const pay = payrollFor(appData(person, lateDay, [], "2026-04-01", [shift], [acceptedReview]), person, "2026-04");
+
+    expect(pay.lateEarlyDeduct).toBe(0);
+    expect(pay.reviewDeduct).toBe(0);
+    expect(pay.totalDeduct).toBe(0);
+    expect(pay.gross).toBe(3000);
+  });
+
+  it("uses the newest HR decision if duplicate review rows exist in restored data", () => {
+    const person = employee();
+    const lateDay = fullDay().map((item) => item.kind === "in" ? { ...item, time: "09:15" } : item);
+    const olderDeductedReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "late"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "late",
+      decision: "deducted",
+      note: "Deduct late",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const newerAcceptedReview: AttendanceReview = {
+      ...olderDeductedReview,
+      decision: "accepted",
+      note: "Approved by management",
+      updatedAt: "2026-04-24T01:00:00.000Z",
+    };
+    const pay = payrollFor(
+      appData(person, lateDay, [], "2026-04-01", [shift], [olderDeductedReview, newerAcceptedReview]),
+      person,
+      "2026-04",
+    );
+
+    expect(pay.lateEarlyDeduct).toBe(0);
+    expect(pay.reviewDeduct).toBe(0);
+    expect(pay.totalDeduct).toBe(0);
+  });
+
+  it("uses HR saved Settings option deduction amounts in payroll reference", () => {
+    const person = employee();
+    const lateDay = fullDay().map((item) => item.kind === "in" ? { ...item, time: "09:15" } : item);
+    const settingsOptionReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "late"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "late",
+      decision: "deducted",
+      amountMode: "settingsOption",
+      ruleDeductionAmount: 5,
+      finalDeductionAmount: 8,
+      payrollImpact: 8,
+      deductionOptionId: "minor",
+      deductionOptionLabel: "Minor deduction",
+      note: "Manager selected Settings option",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const pay = payrollFor(appData(person, lateDay, [], "2026-04-01", [shift], [settingsOptionReview]), person, "2026-04");
+
+    expect(pay.lateEarlyDeduct).toBe(8);
+    expect(pay.reviewDeduct).toBe(8);
+    expect(pay.totalDeduct).toBe(8);
+    expect(pay.gross).toBe(2992);
+  });
+
+  it("keeps unpaid leave pending until HR saves a deduct decision", () => {
     const person = employee();
     const pay = payrollFor(appData(person, [], [leave("Unpaid leave")]), person, "2026-04");
 
     expect(pay.summary.deductibleLeaveDays).toBe(1);
+    expect(pay.summary.deductedUnpaidLeaveDays).toBe(0);
+    expect(pay.unpaidLeaveDeduct).toBe(0);
+    expect(pay.gross).toBe(3000);
+  });
+
+  it("deducts unpaid leave only after HR saves a deduct decision", () => {
+    const person = employee();
+    const deductedReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "unpaidLeave"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "unpaidLeave",
+      decision: "deducted",
+      note: "Unpaid leave",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const pay = payrollFor(
+      appData(person, [], [leave("Unpaid leave")], "2026-04-01", [shift], [deductedReview]),
+      person,
+      "2026-04",
+    );
+
+    expect(pay.summary.deductibleLeaveDays).toBe(1);
+    expect(pay.summary.deductedUnpaidLeaveDays).toBe(1);
     expect(pay.unpaidLeaveDeduct).toBe(100);
     expect(pay.gross).toBe(2900);
+  });
+
+  it("treats sick leave based on Settings paid/deduct, MC, and approval status", () => {
+    const person = employee();
+    const paidSickLeaveData = appData(
+      person,
+      [],
+      [{
+        ...leave("Sick leave"),
+        mcStatus: "provided",
+        approvalStatus: "approved",
+        note: "MC approved",
+        mcAttachment: {
+          id: "mc-001",
+          name: "mc-proof.pdf",
+          type: "application/pdf",
+          size: 1024,
+          dataUrl: "data:application/pdf;base64,JVBERi0x",
+          uploadedBy: "HR admin",
+          uploadedAt: "2026-04-24T00:00:00.000Z",
+        },
+      }],
+      "2026-04-01",
+      [shift],
+    );
+    paidSickLeaveData.settings.leaveTypes = [...paidSickLeaveData.settings.leaveTypes, "Sick leave"];
+    paidSickLeaveData.settings.paidLeaveTypes = [...paidSickLeaveData.settings.paidLeaveTypes, "Sick leave"];
+    paidSickLeaveData.settings.mcRequiredLeaveTypes = ["Sick leave"];
+
+    const paidPay = payrollFor(paidSickLeaveData, person, "2026-04");
+    const paidReviewItems = getDeductionReviewItems(paidSickLeaveData, "2026-04", [person]);
+
+    expect(paidPay.summary.paidLeaveDays).toBe(1);
+    expect(paidPay.summary.deductibleLeaveDays).toBe(0);
+    expect(paidReviewItems.some((item) => item.kind === "unpaidLeave")).toBe(false);
+
+    const deductSickLeaveData = appData(
+      person,
+      [],
+      [{ ...leave("Sick leave"), mcStatus: "notProvided", approvalStatus: "pending", note: "No MC" }],
+      "2026-04-01",
+      [shift],
+    );
+    deductSickLeaveData.settings.leaveTypes = [...deductSickLeaveData.settings.leaveTypes, "Sick leave"];
+    deductSickLeaveData.settings.paidLeaveTypes = ["Annual leave"];
+    deductSickLeaveData.settings.mcRequiredLeaveTypes = ["Sick leave"];
+    const pendingPay = payrollFor(deductSickLeaveData, person, "2026-04");
+    const pendingReviewItems = getDeductionReviewItems(deductSickLeaveData, "2026-04", [person]);
+
+    expect(pendingPay.summary.deductibleLeaveDays).toBe(1);
+    expect(pendingPay.unpaidLeaveDeduct).toBe(0);
+    expect(pendingReviewItems.some((item) => item.kind === "unpaidLeave" && item.relatedLeaveType === "Sick leave")).toBe(true);
+
+    const sickLeaveReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "unpaidLeave"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "unpaidLeave",
+      decision: "deducted",
+      note: "No MC",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+      relatedLeaveType: "Sick leave",
+      leavePayRule: "deduct",
+    };
+    const deductedSickLeaveData = appData(
+      person,
+      [],
+      [{ ...leave("Sick leave"), mcStatus: "notProvided", approvalStatus: "pending", note: "No MC" }],
+      "2026-04-01",
+      [shift],
+      [sickLeaveReview],
+    );
+    deductedSickLeaveData.settings.leaveTypes = [...deductedSickLeaveData.settings.leaveTypes, "Sick leave"];
+    deductedSickLeaveData.settings.paidLeaveTypes = ["Annual leave"];
+    deductedSickLeaveData.settings.mcRequiredLeaveTypes = ["Sick leave"];
+    const deductedPay = payrollFor(deductedSickLeaveData, person, "2026-04");
+
+    expect(deductedPay.summary.deductedUnpaidLeaveDays).toBe(1);
+    expect(deductedPay.unpaidLeaveDeduct).toBe(100);
+    expect(deductedPay.totalDeduct).toBe(100);
   });
 
   it("pays hourly staff from worked hours and paid leave hours", () => {
@@ -385,7 +722,7 @@ describe("payrollFor", () => {
     expect(pay.gross).toBe(2970);
   });
 
-  it("does not double-deduct reviewed short hours for hourly staff", () => {
+  it("uses saved reviewed short-hours amount for hourly staff when HR chooses deduct", () => {
     const person = employee({
       shiftId: flexibleShift.id,
       flexibleWork: true,
@@ -420,9 +757,9 @@ describe("payrollFor", () => {
     );
 
     expect(pay.workHours).toBe(6.5);
-    expect(pay.shortHoursDeduct).toBe(0);
-    expect(pay.totalDeduct).toBe(0);
-    expect(pay.gross).toBe(65);
+    expect(pay.shortHoursDeduct).toBe(15);
+    expect(pay.totalDeduct).toBe(15);
+    expect(pay.gross).toBe(50);
   });
 
   it("pro-rates monthly salary from a mid-month join date", () => {
@@ -501,6 +838,47 @@ describe("payrollFor", () => {
   });
 });
 
+describe("getDeductionReviewItems", () => {
+  it("includes absent, unpaid leave, and missing punch review items", () => {
+    const person = employee();
+    const data = appData(
+      person,
+      [punch("in", "09:00", "2026-04-02")],
+      [leave("Unpaid leave", "2026-04-03")],
+      "2026-04-03",
+    );
+    const items = getDeductionReviewItems(data, "2026-04", [person]);
+
+    expect(items.some((item) => item.date === "2026-04-01" && item.kind === "absent")).toBe(true);
+    expect(items.some((item) => item.date === "2026-04-02" && item.kind === "missingPunch")).toBe(true);
+    expect(items.some((item) => item.date === "2026-04-03" && item.kind === "unpaidLeave")).toBe(true);
+    expect(items.find((item) => item.date === "2026-04-03" && item.kind === "unpaidLeave")).toMatchObject({
+      relatedLeaveType: "Unpaid leave",
+      leavePayRule: "deduct",
+    });
+  });
+
+  it("shows the full monthly detail behind each occurrence count", () => {
+    const person = employee();
+    const punches = [
+      ...fullDay("2026-04-01").map((item) => item.kind === "in" ? { ...item, time: "09:05" } : item),
+      ...fullDay("2026-04-02").map((item) => item.kind === "in" ? { ...item, time: "09:10" } : item),
+      ...fullDay("2026-04-03").map((item) => item.kind === "in" ? { ...item, time: "09:15" } : item),
+    ];
+
+    const items = getDeductionReviewItems(appData(person, punches, [], "2026-04-30"), "2026-04", [person])
+      .filter((item) => item.kind === "late");
+
+    expect(items).toHaveLength(3);
+    expect(items[0].occurrenceCount).toBe(3);
+    expect(items[0].occurrenceDetails.map((item) => `${item.date}:${item.durationMinutes}`)).toEqual([
+      "2026-04-01:5",
+      "2026-04-02:10",
+      "2026-04-03:15",
+    ]);
+  });
+});
+
 describe("getMonthlyReadiness", () => {
   it("reports empty, pending, and ready month states", () => {
     const person = employee();
@@ -508,6 +886,49 @@ describe("getMonthlyReadiness", () => {
     expect(getMonthlyReadiness(appData(person), "2026-04").status).toBe("empty");
     expect(getMonthlyReadiness(appData(person, [punch("in", "09:00")]), "2026-04").missingCount).toBe(1);
     expect(getMonthlyReadiness(appData(person, fullDay()), "2026-04").status).toBe("ready");
+  });
+
+  it("does not keep confirmed absent deductions pending for payroll readiness", () => {
+    const person = employee();
+    const deductedReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "absent"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "absent",
+      decision: "deducted",
+      note: "Confirmed absent",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const readiness = getMonthlyReadiness(
+      appData(person, [], [], "2026-04-01", [shift], [deductedReview]),
+      "2026-04",
+    );
+
+    expect(readiness.hasOperationalData).toBe(true);
+    expect(readiness.absentCount).toBe(0);
+    expect(readiness.unresolvedCount).toBe(0);
+    expect(readiness.status).toBe("ready");
+  });
+
+  it("keeps pending absent reviews waiting for HR correction", () => {
+    const person = employee();
+    const pendingReview: AttendanceReview = {
+      id: attendanceReviewId(person.id, "2026-04-01", "absent"),
+      employeeId: person.id,
+      date: "2026-04-01",
+      kind: "absent",
+      decision: "pending",
+      note: "Needs correction",
+      updatedAt: "2026-04-24T00:00:00.000Z",
+    };
+    const readiness = getMonthlyReadiness(
+      appData(person, [], [], "2026-04-01", [shift], [pendingReview]),
+      "2026-04",
+    );
+
+    expect(readiness.absentCount).toBe(1);
+    expect(readiness.unresolvedCount).toBe(1);
+    expect(readiness.status).toBe("pending");
   });
 
   it("marks short-hours months as pending for HR review", () => {

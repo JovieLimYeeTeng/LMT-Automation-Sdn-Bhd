@@ -312,8 +312,8 @@ export function createSeedData(): AppData {
       { id: "holiday-002", date: "2026-05-01", name: "Labour Day" },
     ],
     leaves: [
-      { id: "leave-001", employeeId: "emp-002", date: "2026-04-22", type: "年假", hours: 8, note: "Approved" },
-      { id: "leave-002", employeeId: "emp-003", date: "2026-04-17", type: "病假", hours: 8, note: "MC" },
+      { id: "leave-001", employeeId: "emp-002", date: "2026-04-22", type: "年假", hours: 8, note: "Approved", mcStatus: "notRequired", approvalStatus: "approved" },
+      { id: "leave-002", employeeId: "emp-003", date: "2026-04-17", type: "病假", hours: 8, note: "MC", mcStatus: "provided", approvalStatus: "approved" },
     ],
     punches: buildSeedPunches(),
     attendanceReviews: [],
@@ -326,8 +326,20 @@ export function createSeedData(): AppData {
       positions: ["Supervisor", "Service Crew", "HR Admin", "Store Assistant", "Part Time", "Night Operator"],
       nationalities: ["Malaysia", "Singapore", "Indonesia", "China", "Bangladesh", "Nepal", "Myanmar"],
       leaveTypes: ["病假", "年假", "带薪假", "无薪假"],
-      paidLeaveTypes: ["年假", "带薪假"],
+      paidLeaveTypes: ["病假", "年假", "带薪假"],
+      mcRequiredLeaveTypes: ["病假"],
       correctionReasons: ["Forgot punch in", "Forgot punch out", "Wrong punch time", "Device issue", "Approved manual correction"],
+      deductionReasons: ["First-time late", "Approved by management", "Traffic issue", "Special case", "Already informed HR"],
+      deductionAmounts: {
+        source: "settings",
+        fullDayDeductPerDay: 130,
+        minuteDeductHourlyRate: 18,
+      },
+      deductionAmountOptions: [
+        { id: "deduct-amount-none", label: "No deduction / special case", amount: 0 },
+        { id: "deduct-amount-minor", label: "Minor deduction", amount: 10 },
+        { id: "deduct-amount-full-day", label: "Full-day deduction", amount: 130 },
+      ],
       device: {
         fingerprint: true,
         face: false,

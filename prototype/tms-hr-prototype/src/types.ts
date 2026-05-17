@@ -86,6 +86,20 @@ export interface SalaryConfig {
   leaveDeductPerDay: number;
 }
 
+export type DeductionAmountSource = "employee" | "settings";
+
+export interface DeductionAmountSettings {
+  source: DeductionAmountSource;
+  fullDayDeductPerDay: number;
+  minuteDeductHourlyRate: number;
+}
+
+export interface DeductionAmountOption {
+  id: string;
+  label: string;
+  amount: number;
+}
+
 export interface PunchDeviceSettings {
   fingerprint: boolean;
   face: boolean;
@@ -106,6 +120,43 @@ export interface LeaveEntry {
   type: string;
   hours: number;
   note: string;
+  mcStatus?: "provided" | "notProvided" | "pending" | "notRequired";
+  approvalStatus?: "approved" | "pending" | "rejected";
+  mcAttachment?: LeaveMcAttachment;
+  mcAuditTrail?: LeaveMcAuditEntry[];
+}
+
+export interface LeaveMcAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface LeaveMcAuditEntry {
+  id: string;
+  action: "upload" | "change" | "remove" | "mcStatus" | "approvalStatus" | "field" | "delete";
+  actor: string;
+  changedAt: string;
+  oldValue?: string;
+  newValue?: string;
+}
+
+export interface LeaveAuditEntry {
+  id: string;
+  leaveId: string;
+  employeeId: string;
+  date: string;
+  action: "create" | "update" | "delete";
+  field?: string;
+  actor: string;
+  changedAt: string;
+  oldValue?: string;
+  newValue?: string;
+  remark?: string;
 }
 
 export interface Punch {
@@ -125,8 +176,9 @@ export interface Punch {
   rawDateTime?: string;
 }
 
-export type AttendanceReviewKind = "shortHours";
-export type AttendanceReviewDecision = "accepted" | "deducted";
+export type AttendanceReviewKind = "late" | "early" | "shortHours" | "absent" | "unpaidLeave" | "missingPunch";
+export type AttendanceReviewDecision = "accepted" | "deducted" | "convertedToLeave" | "pending";
+export type AttendanceReviewAmountMode = "rules" | "settingsOption" | "none";
 
 export interface AttendanceReview {
   id: string;
@@ -135,7 +187,18 @@ export interface AttendanceReview {
   kind: AttendanceReviewKind;
   decision: AttendanceReviewDecision;
   note: string;
+  reviewedBy?: string;
   updatedAt: string;
+  amountMode?: AttendanceReviewAmountMode;
+  ruleDeductionAmount?: number;
+  finalDeductionAmount?: number;
+  deductionOptionId?: string;
+  deductionOptionLabel?: string;
+  payrollImpact?: number;
+  payrollImpactCurrency?: string;
+  relatedLeaveType?: string;
+  leavePayRule?: "paid" | "deduct";
+  relatedCorrectionReason?: string;
 }
 
 export interface TimecardCorrectionAuditPunch {
@@ -148,6 +211,7 @@ export interface TimecardCorrectionAuditPunch {
 
 export interface TimecardCorrectionAudit {
   id: string;
+  targetId?: string;
   employeeId: string;
   date: string;
   action: "save" | "clear";
@@ -167,7 +231,11 @@ export interface AppSettings {
   nationalities: string[];
   leaveTypes: string[];
   paidLeaveTypes: string[];
+  mcRequiredLeaveTypes: string[];
   correctionReasons: string[];
+  deductionReasons: string[];
+  deductionAmounts: DeductionAmountSettings;
+  deductionAmountOptions: DeductionAmountOption[];
   device: PunchDeviceSettings;
   requirePassword: boolean;
   usbLicenseRequired: boolean;
@@ -181,6 +249,7 @@ export interface AppData {
   shifts: Shift[];
   holidays: Holiday[];
   leaves: LeaveEntry[];
+  leaveAuditTrail?: LeaveAuditEntry[];
   punches: Punch[];
   attendanceReviews: AttendanceReview[];
   timecardCorrectionAudits: TimecardCorrectionAudit[];

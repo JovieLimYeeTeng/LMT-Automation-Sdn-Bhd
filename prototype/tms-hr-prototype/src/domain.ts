@@ -1,9 +1,13 @@
 import { dict, makeT, translateDataValue, type Lang } from "./i18n";
 import type {
   AppData,
+  AppSettings,
+  AttendanceReview,
+  AttendanceReviewAmountMode,
   AttendanceReviewDecision,
   AttendanceRecord,
   AttendanceStatus,
+  DeductionAmountSettings,
   DaySchedule,
   Employee,
   FlagToken,
@@ -18,7 +22,54 @@ import type {
 } from "./types";
 
 export const weekdayOrder: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
+
+export interface DeductionReviewItem {
+  id: string;
+  employee: Employee;
+  record: AttendanceRecord;
+  date: string;
+  kind: AttendanceReviewKind;
+  occurrenceCount: number;
+  durationMinutes: number;
+  dayCount: number;
+  decision: AttendanceReviewDecision | undefined;
+  amountMode: AttendanceReviewAmountMode | undefined;
+  ruleDeductionAmount?: number;
+  finalDeductionAmount?: number;
+  deductionOptionId?: string;
+  deductionOptionLabel?: string;
+  relatedLeaveType?: string;
+  leavePayRule?: "paid" | "deduct";
+  relatedCorrectionReason?: string;
+  note: string;
+  reviewedBy: string;
+  updatedAt: string;
+  payrollImpact?: number;
+  payrollImpactCurrency?: string;
+  occurrenceDetails: DeductionReviewOccurrence[];
+}
+
+export interface DeductionReviewOccurrence {
+  date: string;
+  durationMinutes: number;
+  dayCount: number;
+  decision: AttendanceReviewDecision | undefined;
+  amountMode: AttendanceReviewAmountMode | undefined;
+  ruleDeductionAmount?: number;
+  finalDeductionAmount?: number;
+  deductionOptionId?: string;
+  deductionOptionLabel?: string;
+  relatedLeaveType?: string;
+  leavePayRule?: "paid" | "deduct";
+  relatedCorrectionReason?: string;
+  note: string;
+  reviewedBy: string;
+  updatedAt: string;
+  payrollImpact?: number;
+  payrollImpactCurrency?: string;
+}
 export const DEFAULT_PAID_LEAVE_TYPES = ["年假", "带薪假"];
+export const DEFAULT_MC_REQUIRED_LEAVE_TYPES = ["病假", "Sick leave"];
 
 export const weekdayLabels: Record<Lang, Record<Weekday, string>> = {
   zh: {
@@ -158,6 +209,25 @@ export function attendanceReviewId(employeeId: string, date: string, kind: Atten
   return `review-${employeeId}-${date}-${kind}`;
 }
 
+export function getAttendanceReview(
+  data: AppData,
+  employeeId: string,
+  date: string,
+  kind: AttendanceReviewKind,
+): AttendanceReview | undefined {
+  return (data.attendanceReviews ?? [])
+    .filter(
+      (review) =>
+        review.employeeId === employeeId &&
+        review.date === date &&
+        review.kind === kind,
+    )
+    .reduce<AttendanceReview | undefined>((latest, review) => {
+      if (!latest) return review;
+      return review.updatedAt >= latest.updatedAt ? review : latest;
+    }, undefined);
+}
+
 export function isAttendanceReviewAccepted(
   data: AppData,
   employeeId: string,
@@ -173,12 +243,11 @@ export function getAttendanceReviewDecision(
   date: string,
   kind: AttendanceReviewKind,
 ): AttendanceReviewDecision | undefined {
-  return (data.attendanceReviews ?? []).find(
-    (review) =>
-      review.employeeId === employeeId &&
-      review.date === date &&
-      review.kind === kind,
-  )?.decision;
+  return getAttendanceReview(data, employeeId, date, kind)?.decision;
+}
+
+function isResolvedAttendanceReviewDecision(decision: AttendanceReviewDecision | undefined): boolean {
+  return decision === "accepted" || decision === "deducted" || decision === "convertedToLeave";
 }
 
 export function parseDate(date: string): Date {
@@ -320,6 +389,47 @@ export function isPaidLeaveType(type: string, data?: AppData): boolean {
   const normalized = type.trim().toLowerCase();
   return DEFAULT_PAID_LEAVE_TYPES.some((item) => item.toLowerCase() === normalized)
     || ["annual leave", "paid leave"].includes(normalized);
+}
+
+export function isMcRequiredLeaveType(type: string, data?: AppData): boolean {
+  const configured = data?.settings.mcRequiredLeaveTypes;
+  if (configured) return configured.includes(type);
+
+  const normalized = type.trim().toLowerCase();
+  return DEFAULT_MC_REQUIRED_LEAVE_TYPES.some((item) => item.toLowerCase() === normalized)
+    || ["sick leave", "medical leave", "mc leave"].includes(normalized);
+}
+
+export function resolvedLeaveMcStatus(
+  leave: LeaveEntry | undefined,
+  data?: AppData,
+): NonNullable<LeaveEntry["mcStatus"]> {
+  if (!leave) return "notRequired";
+  if (leave.mcStatus) return leave.mcStatus;
+  if (!isMcRequiredLeaveType(leave.type, data)) return "notRequired";
+  return leave.note.trim().toLowerCase().includes("mc") ? "provided" : "pending";
+}
+
+export function resolvedLeaveApprovalStatus(
+  leave: LeaveEntry | undefined,
+): NonNullable<LeaveEntry["approvalStatus"]> {
+  if (!leave) return "pending";
+  if (leave.approvalStatus) return leave.approvalStatus;
+  const note = leave.note.trim().toLowerCase();
+  if (note.includes("reject")) return "rejected";
+  if (note.includes("approved") || note.includes("mc")) return "approved";
+  return "pending";
+}
+
+export function leaveNeedsDeductionReview(leave: LeaveEntry | undefined, data: AppData): boolean {
+  if (!leave) return false;
+  const paid = isPaidLeaveType(leave.type, data);
+  const requiresMc = isMcRequiredLeaveType(leave.type, data);
+  const mcStatus = resolvedLeaveMcStatus(leave, data);
+  const approvalStatus = resolvedLeaveApprovalStatus(leave);
+  return !paid ||
+    approvalStatus !== "approved" ||
+    (requiresMc && (mcStatus === "notProvided" || mcStatus === "pending" || (mcStatus === "provided" && !leave.mcAttachment)));
 }
 
 export function sortByDateTime<T extends { date: string; time?: string }>(items: T[]): T[] {
@@ -597,11 +707,188 @@ export function getRecordsForMonth(data: AppData, month: string, employees = dat
   return employees.flatMap((employee) => monthDates(month).map((date) => calculateAttendance(data, employee, date)));
 }
 
+function shortHoursGapMinutes(record: AttendanceRecord): number {
+  const shortHoursFlag = record.flags.find(
+    (flag) =>
+      flag.kind === "underWork" ||
+      flag.kind === "underWorkAccepted" ||
+      flag.kind === "underWorkDeducted",
+  );
+  if (!shortHoursFlag || record.workMinutes <= 0) return 0;
+  return Math.max(0, shortHoursFlag.hours * 60 - record.workMinutes);
+}
+
+function baseDeductionIssues(
+  record: AttendanceRecord,
+  data: AppData,
+): Array<Pick<DeductionReviewItem, "kind" | "durationMinutes" | "dayCount" | "relatedLeaveType" | "leavePayRule">> {
+  const items: Array<Pick<DeductionReviewItem, "kind" | "durationMinutes" | "dayCount" | "relatedLeaveType" | "leavePayRule">> = [];
+  if (record.status === "absent") items.push({ kind: "absent", durationMinutes: 0, dayCount: 1 });
+  if (record.status === "leave" && record.leave && leaveNeedsDeductionReview(record.leave, data)) {
+    items.push({
+      kind: "unpaidLeave",
+      durationMinutes: 0,
+      dayCount: 1,
+      relatedLeaveType: record.leave.type,
+      leavePayRule: isPaidLeaveType(record.leave.type, data) ? "paid" : "deduct",
+    });
+  }
+  if (record.status === "incomplete" && record.flags.some((flag) => flag.kind === "missingPunch")) {
+    items.push({ kind: "missingPunch", durationMinutes: 0, dayCount: 0 });
+  }
+  if (record.lateMinutes > 0) items.push({ kind: "late", durationMinutes: record.lateMinutes, dayCount: 0 });
+  if (record.earlyMinutes > 0) items.push({ kind: "early", durationMinutes: record.earlyMinutes, dayCount: 0 });
+  const gapMinutes = shortHoursGapMinutes(record);
+  if (gapMinutes > 0) items.push({ kind: "shortHours", durationMinutes: gapMinutes, dayCount: 0 });
+  return items;
+}
+
+function normalizedDeductionAmountSettings(settings?: Pick<AppSettings, "deductionAmounts">): DeductionAmountSettings {
+  const configured = settings?.deductionAmounts;
+  return {
+    source: "settings",
+    fullDayDeductPerDay: Math.max(0, configured?.fullDayDeductPerDay ?? 0),
+    minuteDeductHourlyRate: Math.max(0, configured?.minuteDeductHourlyRate ?? 0),
+  };
+}
+
+function employeeAmountWithSettingsFallback(employeeAmount: number, settingsAmount: number): number {
+  return employeeAmount > 0 ? employeeAmount : settingsAmount;
+}
+
+export function calculateRuleDeductionAmount(
+  item: Pick<DeductionReviewItem, "employee" | "kind" | "durationMinutes" | "dayCount">,
+  decision: AttendanceReviewDecision,
+  settings?: Pick<AppSettings, "deductionAmounts">,
+): number {
+  if (decision !== "deducted") return 0;
+  const deductionAmounts = normalizedDeductionAmountSettings(settings);
+  if (item.kind === "absent" || item.kind === "unpaidLeave") {
+    if (item.employee.salary.type !== "monthly") return 0;
+    return (item.dayCount || 1) * deductionAmounts.fullDayDeductPerDay;
+  }
+  if (item.kind === "missingPunch") return 0;
+  if (item.kind === "late" || item.kind === "early") {
+    const hourlyRate = employeeAmountWithSettingsFallback(
+      item.employee.salary.hourlyRate,
+      deductionAmounts.minuteDeductHourlyRate,
+    );
+    return (item.durationMinutes / 60) * hourlyRate;
+  }
+  if (item.kind === "shortHours") {
+    const hourlyRate = employeeAmountWithSettingsFallback(
+      item.employee.salary.hourlyRate,
+      deductionAmounts.minuteDeductHourlyRate,
+    );
+    return (item.durationMinutes / 60) * hourlyRate;
+  }
+  return 0;
+}
+
+export function finalDeductionPayrollImpact(
+  item: Pick<
+    DeductionReviewItem,
+    "employee" | "kind" | "durationMinutes" | "dayCount" | "decision" | "payrollImpact" | "finalDeductionAmount"
+  >,
+  settings?: Pick<AppSettings, "deductionAmounts">,
+): number {
+  if (item.decision !== "deducted") return 0;
+  if (typeof item.finalDeductionAmount === "number") return item.finalDeductionAmount;
+  if (typeof item.payrollImpact === "number") return item.payrollImpact;
+  return calculateRuleDeductionAmount(item, "deducted", settings);
+}
+
+export function getDeductionReviewItems(
+  data: AppData,
+  month: string,
+  employees = data.employees,
+): DeductionReviewItem[] {
+  const records = getRecordsForMonth(data, month, employees.filter((employee) => employee.active));
+  const drafts = records.flatMap((record) =>
+    baseDeductionIssues(record, data).map((issue) => {
+      const key = `${record.employee.id}:${issue.kind}`;
+      return { record, issue, key };
+    }),
+  );
+  const occurrenceGroups = new Map<string, DeductionReviewOccurrence[]>();
+  drafts.forEach(({ record, issue, key }) => {
+    const review = getAttendanceReview(data, record.employee.id, record.date, issue.kind);
+    const ruleDeductionAmount = calculateRuleDeductionAmount(
+      { employee: record.employee, kind: issue.kind, durationMinutes: issue.durationMinutes, dayCount: issue.dayCount },
+      "deducted",
+      data.settings,
+    );
+    const details = occurrenceGroups.get(key) ?? [];
+    details.push({
+      date: record.date,
+      durationMinutes: issue.durationMinutes,
+      dayCount: issue.dayCount,
+      decision: review?.decision,
+      amountMode: review?.amountMode,
+      ruleDeductionAmount: review?.ruleDeductionAmount ?? ruleDeductionAmount,
+      finalDeductionAmount: review?.finalDeductionAmount ?? review?.payrollImpact,
+      deductionOptionId: review?.deductionOptionId,
+      deductionOptionLabel: review?.deductionOptionLabel,
+      relatedLeaveType: review?.relatedLeaveType ?? issue.relatedLeaveType,
+      leavePayRule: review?.leavePayRule ?? issue.leavePayRule,
+      relatedCorrectionReason: review?.relatedCorrectionReason,
+      note: review?.note ?? "",
+      reviewedBy: review?.reviewedBy ?? "",
+      updatedAt: review?.updatedAt ?? "",
+      payrollImpact: review?.payrollImpact,
+      payrollImpactCurrency: review?.payrollImpactCurrency,
+    });
+    occurrenceGroups.set(key, details);
+  });
+  occurrenceGroups.forEach((details) => details.sort((a, b) => a.date.localeCompare(b.date)));
+
+  return drafts.map(({ record, issue, key }) => {
+    const review = getAttendanceReview(data, record.employee.id, record.date, issue.kind);
+    const occurrenceDetails = occurrenceGroups.get(key) ?? [];
+    const occurrenceCount = occurrenceDetails.length || 1;
+    const ruleDeductionAmount = calculateRuleDeductionAmount(
+      { employee: record.employee, kind: issue.kind, durationMinutes: issue.durationMinutes, dayCount: issue.dayCount },
+      "deducted",
+      data.settings,
+    );
+    return {
+      id: attendanceReviewId(record.employee.id, record.date, issue.kind),
+      employee: record.employee,
+      record,
+      date: record.date,
+      kind: issue.kind,
+      occurrenceCount,
+      durationMinutes: issue.durationMinutes,
+      dayCount: issue.dayCount,
+      decision: review?.decision,
+      amountMode: review?.amountMode,
+      ruleDeductionAmount: review?.ruleDeductionAmount ?? ruleDeductionAmount,
+      finalDeductionAmount: review?.finalDeductionAmount ?? review?.payrollImpact,
+      deductionOptionId: review?.deductionOptionId,
+      deductionOptionLabel: review?.deductionOptionLabel,
+      relatedLeaveType: review?.relatedLeaveType ?? issue.relatedLeaveType,
+      leavePayRule: review?.leavePayRule ?? issue.leavePayRule,
+      relatedCorrectionReason: review?.relatedCorrectionReason,
+      note: review?.note ?? "",
+      reviewedBy: review?.reviewedBy ?? "",
+      updatedAt: review?.updatedAt ?? "",
+      payrollImpact: review?.payrollImpact,
+      payrollImpactCurrency: review?.payrollImpactCurrency,
+      occurrenceDetails,
+    };
+  });
+}
+
 export function makePunchId(employeeId: string, date: string, kind: PunchKind): string {
   return `${employeeId}-${date}-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 export function payrollFor(data: AppData, employee: Employee, month: string) {
+  // Payroll source-of-truth guard:
+  // attendance is derived from current punches/leaves, deductions are applied
+  // only from saved HR review decisions that still match currently detected
+  // review items, employee salary values drive employee pay, and Settings only
+  // provide default deduction rules/options for unresolved or legacy review data.
   const summary = summarizeEmployee(data, employee, month);
   const workHours = summary.workMinutes / 60;
   const otHours = summary.overtimeMinutes / 60;
@@ -633,13 +920,25 @@ export function payrollFor(data: AppData, employee: Employee, month: string) {
       ? monthlyBase
       : (baseHours + paidLeaveHours) * employee.salary.hourlyRate;
   const otPay = otHours * employee.salary.hourlyRate * employee.salary.otMultiplier;
-  const absentDeduct =
-    employee.salary.type === "monthly" ? summary.absentDays * employee.salary.leaveDeductPerDay : 0;
-  const unpaidLeaveDeduct =
-    employee.salary.type === "monthly" ? summary.deductibleLeaveDays * employee.salary.leaveDeductPerDay : 0;
-  const shortHoursDeduct =
-    employee.salary.type === "monthly" ? (summary.deductedShortHoursMinutes / 60) * employee.salary.hourlyRate : 0;
-  const totalDeduct = absentDeduct + unpaidLeaveDeduct + shortHoursDeduct;
+  const savedReviewItems = getDeductionReviewItems(data, month, [employee])
+    .filter((item) => item.decision === "deducted");
+  const absentDeduct = savedReviewItems
+    .filter((item) => item.kind === "absent")
+    .reduce((sum, item) => sum + finalDeductionPayrollImpact(item, data.settings), 0);
+  const unpaidLeaveDeduct = savedReviewItems
+    .filter((item) => item.kind === "unpaidLeave")
+    .reduce((sum, item) => sum + finalDeductionPayrollImpact(item, data.settings), 0);
+  const shortHoursDeduct = savedReviewItems
+    .filter((item) => item.kind === "shortHours")
+    .reduce((sum, item) => sum + finalDeductionPayrollImpact(item, data.settings), 0);
+  const lateEarlyDeduct = savedReviewItems
+    .filter((item) => item.kind === "late" || item.kind === "early")
+    .reduce((sum, item) => sum + finalDeductionPayrollImpact(item, data.settings), 0);
+  const missingPunchDeduct = savedReviewItems
+    .filter((item) => item.kind === "missingPunch")
+    .reduce((sum, item) => sum + finalDeductionPayrollImpact(item, data.settings), 0);
+  const reviewDeduct = lateEarlyDeduct + missingPunchDeduct;
+  const totalDeduct = absentDeduct + unpaidLeaveDeduct + shortHoursDeduct + reviewDeduct;
   const leaveDeduct = unpaidLeaveDeduct;
   const gross = base + otPay - totalDeduct;
   const warningFlags = [
@@ -667,6 +966,9 @@ export function payrollFor(data: AppData, employee: Employee, month: string) {
     absentDeduct,
     unpaidLeaveDeduct,
     shortHoursDeduct,
+    lateEarlyDeduct,
+    missingPunchDeduct,
+    reviewDeduct,
     leaveDeduct,
     totalDeduct,
     gross,
@@ -680,23 +982,32 @@ export function getMonthlyReadiness(data: AppData, month: string, employees = da
   const monthPunchIds = new Set(records.flatMap((record) => record.punches.map((punch) => punch.id)));
   const monthPunchCount = monthPunchIds.size;
   const monthLeaveCount = data.leaves.filter((leave) => leave.date.startsWith(month)).length;
-  const missingCount = records.filter((record) => record.status === "incomplete").length;
-  const absentCount = records.filter((record) => record.status === "absent").length;
-  const shortHoursCount = records.filter((record) => record.flags.some((flag) => flag.kind === "underWork")).length;
-  const lateEarlyCount = records.filter((record) => record.lateMinutes > 0 || record.earlyMinutes > 0).length;
+  const deductionReviewItems = getDeductionReviewItems(data, month, employees);
+  const activeReviewIds = new Set(deductionReviewItems.map((item) => item.id));
+  const monthReviewCount = (data.attendanceReviews ?? []).filter(
+    (review) => review.date.startsWith(month) && activeReviewIds.has(review.id),
+  ).length;
+  const unresolvedDeductionItems = deductionReviewItems.filter((item) => !isResolvedAttendanceReviewDecision(item.decision));
+  const missingCount = unresolvedDeductionItems.filter((item) => item.kind === "missingPunch").length;
+  const absentCount = unresolvedDeductionItems.filter((item) => item.kind === "absent").length;
+  const shortHoursCount = unresolvedDeductionItems.filter((item) => item.kind === "shortHours").length;
+  const lateEarlyCount = unresolvedDeductionItems.filter((item) => item.kind === "late" || item.kind === "early").length;
+  const unpaidLeaveCount = unresolvedDeductionItems.filter((item) => item.kind === "unpaidLeave").length;
   const lunchOverCount = records.filter((record) => record.flags.some((flag) => flag.kind === "lunchOver")).length;
   const overtimeCount = records.filter((record) => record.overtimeMinutes > 0).length;
-  const unresolvedCount = missingCount + absentCount + shortHoursCount + lateEarlyCount + lunchOverCount + overtimeCount;
-  const hasOperationalData = monthPunchCount > 0 || monthLeaveCount > 0;
+  const unresolvedCount = missingCount + absentCount + shortHoursCount + lateEarlyCount + unpaidLeaveCount + lunchOverCount + overtimeCount;
+  const hasOperationalData = monthPunchCount > 0 || monthLeaveCount > 0 || monthReviewCount > 0;
 
   return {
     hasOperationalData,
     monthPunchCount,
     monthLeaveCount,
+    monthReviewCount,
     missingCount: hasOperationalData ? missingCount : 0,
     absentCount: hasOperationalData ? absentCount : 0,
     shortHoursCount: hasOperationalData ? shortHoursCount : 0,
     lateEarlyCount: hasOperationalData ? lateEarlyCount : 0,
+    unpaidLeaveCount: hasOperationalData ? unpaidLeaveCount : 0,
     lunchOverCount: hasOperationalData ? lunchOverCount : 0,
     overtimeCount: hasOperationalData ? overtimeCount : 0,
     unresolvedCount: hasOperationalData ? unresolvedCount : 0,
@@ -707,17 +1018,34 @@ export function getMonthlyReadiness(data: AppData, month: string, employees = da
 export function summarizeEmployee(data: AppData, employee: Employee, month: string) {
   const records = monthDates(month).map((date) => calculateAttendance(data, employee, date));
   const leaveRecords = records.filter((record) => record.status === "leave" && record.leave);
+  const unpaidLeaveRecords = leaveRecords.filter((record) => leaveNeedsDeductionReview(record.leave, data));
+  const absentRecords = records.filter((record) => record.status === "absent");
   return {
     employee,
     workDays: records.filter((record) => ["present", "late", "early", "ot", "incomplete"].includes(record.status))
       .length,
-    absentDays: records.filter((record) => record.status === "absent").length,
+    absentDays: absentRecords.length,
+    acceptedAbsentDays: absentRecords.filter(
+      (record) => getAttendanceReviewDecision(data, employee.id, record.date, "absent") === "accepted",
+    ).length,
+    deductedAbsentDays: absentRecords.filter(
+      (record) => getAttendanceReviewDecision(data, employee.id, record.date, "absent") === "deducted",
+    ).length,
+    pendingAbsentDays: absentRecords.filter(
+      (record) => getAttendanceReviewDecision(data, employee.id, record.date, "absent") === "pending",
+    ).length,
     leaveDays: leaveRecords.length,
     paidLeaveDays: leaveRecords.filter((record) => isPaidLeaveType(record.leave!.type, data)).length,
     paidLeaveHours: leaveRecords
       .filter((record) => isPaidLeaveType(record.leave!.type, data))
       .reduce((sum, record) => sum + record.leave!.hours, 0),
-    deductibleLeaveDays: leaveRecords.filter((record) => !isPaidLeaveType(record.leave!.type, data)).length,
+    deductibleLeaveDays: unpaidLeaveRecords.length,
+    acceptedUnpaidLeaveDays: unpaidLeaveRecords.filter(
+      (record) => getAttendanceReviewDecision(data, employee.id, record.date, "unpaidLeave") === "accepted",
+    ).length,
+    deductedUnpaidLeaveDays: unpaidLeaveRecords.filter(
+      (record) => getAttendanceReviewDecision(data, employee.id, record.date, "unpaidLeave") === "deducted",
+    ).length,
     lateCount: records.filter((record) => record.lateMinutes > 0).length,
     earlyCount: records.filter((record) => record.earlyMinutes > 0).length,
     missingCount: records.filter((record) => record.status === "incomplete").length,
