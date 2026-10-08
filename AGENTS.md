@@ -1,6 +1,6 @@
-# WEMAX-TMS / Project Context for Codex
+# WEMAX-TMS / Project Context for coding agents
 
-> 给下一次会话的 Codex：先读这份。再按需要进入 `docs/` 看深度。
+> 给下一次会话的 agent（Codex / Claude Code）：先读这份。再按需要进入 `docs/` 看深度。
 
 ## 〇、关键设计决策 — enrollid binding（2026-05-03）
 
